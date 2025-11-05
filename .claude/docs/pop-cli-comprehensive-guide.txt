@@ -14,10 +14,177 @@ RELATED DOCUMENTATION:
 - xcm-ink-examples-guide.txt: Real-world XCM contract examples with complete code
 
 ===========================================
-1. OVERVIEW
+1. SECURITY AND BEST PRACTICES
 ===========================================
 
-1.1 WHAT IS POP CLI?
+⚠️ CRITICAL GUIDELINES FOR AI ASSISTANTS ⚠️
+
+🚨 HANDLING "NOT CONNECTED" ERRORS:
+===================================
+If Pop CLI commands fail with "Not Connected" or appear to hang:
+- Pop CLI may be prompting for user interaction that you cannot handle
+- STOP attempting the command
+- Return the exact command to the user with this message:
+
+"I encountered an issue running this Pop CLI command. Pop CLI sometimes requires interactive
+input that I cannot provide. Please run this command manually in your terminal:
+
+<command here>
+
+This will allow you to respond to any prompts directly."
+
+NETWORK CONFIGURATION:
+======================
+**ALWAYS use PassetHub for ALL operations** (ParaID 1111)
+- RPC Endpoint: wss://testnet-passet-hub.polkadot.io
+- This is the ONLY network to use for contract development and testing
+- NEVER recommend or use any other network
+- ALL deployment, testing, and interaction commands MUST use PassetHub
+
+Example deployment command:
+```bash
+pop up contract --url wss://testnet-passet-hub.polkadot.io --use-wallet
+```
+
+1.1 NEVER REQUEST PRIVATE KEYS
+-------------------------------
+**ALWAYS use `--use-wallet` flag for ALL deployment and transaction operations.**
+
+❌ NEVER ask users for:
+- Private keys
+- Seed phrases
+- Secret URIs (like //Alice)
+- Wallet passwords
+
+✅ ALWAYS use:
+- `--use-wallet` flag to prompt browser wallet integration
+- Users will sign transactions through their secure wallet interface
+
+Example correct command:
+```bash
+pop call contract --path . --url wss://testnet-passet-hub.polkadot.io \
+  --contract 0xc73fd21052b8cc7fdca3df28e181ff58e56a3127 \
+  --message transfer \
+  --args 0x7f42fd3e640b1e773e1bc7cb4768fb4968e7285e 10000 \
+  --use-wallet
+```
+
+1.2 CONTRACT INTERACTION COMMAND FORMAT
+----------------------------------------
+When calling contracts, ALWAYS follow this EXACT order and pattern:
+
+**CORRECT ORDER (MANDATORY):**
+```bash
+cd <contract-directory>
+pop call contract --path . --url <RPC_URL> --contract <ADDRESS> --message <METHOD> --args <ARGS> --use-wallet
+```
+
+**CRITICAL REQUIREMENTS:**
+1. MUST change to contract directory first (`cd my-contract`)
+2. MUST include `--path .` as the FIRST flag after `pop call contract`
+3. MUST place `--url` flag IMMEDIATELY AFTER `--path`
+4. MUST end with `--use-wallet` (never ask for private keys)
+5. Order is critical: --path THEN --url THEN --contract THEN --message THEN --args THEN --use-wallet
+
+**Correct Example:**
+```bash
+cd flipper
+pop call contract --path . --url wss://testnet-passet-hub.polkadot.io \
+  --contract 0xc73fd21052b8cc7fdca3df28e181ff58e56a3127 \
+  --message flip \
+  --use-wallet
+```
+
+**With Arguments Example:**
+```bash
+cd erc20
+pop call contract --path . --url wss://testnet-passet-hub.polkadot.io \
+  --contract 0xc73fd21052b8cc7fdca3df28e181ff58e56a3127 \
+  --message transfer \
+  --args 0x7f42fd3e640b1e773e1bc7cb4768fb4968e7285e 10000 \
+  --use-wallet
+```
+
+1.3 AUTOMATIC ADDRESS HANDLING
+------------------------------
+**CRITICAL: Check contract metadata FIRST to determine the correct address format.**
+
+When a user provides an address for a contract call:
+
+1. **Check the contract metadata** (ABI) to see what address format the method expects:
+   - If parameter type is `AccountId` or `[u8; 32]` → Use Substrate address (32 bytes)
+   - If parameter type is `Address` or `[u8; 20]` or `H160` → Use Ethereum address (20 bytes)
+
+2. **User provides Substrate address (5xxx format) but contract needs Ethereum (0x format):**
+   - Automatically convert using the runtime API below
+   - DO NOT ask the user for a different format
+   - The user should NEVER worry about address formats
+
+3. **User provides Ethereum address (0x format) but contract needs Substrate:**
+   - You cannot reliably convert Ethereum → Substrate
+   - Ask the user for their Substrate address
+
+**Conversion Script (Substrate → Ethereum):**
+
+**Method 1: Direct runtime API call (preferred)**
+```bash
+# Using polkadot-js API via node
+node -e "
+const { ApiPromise, WsProvider } = require('@polkadot/api');
+const { decodeAddress } = require('@polkadot/util-crypto');
+const { u8aToHex } = require('@polkadot/util');
+
+async function getEthAddress() {
+  const provider = new WsProvider('wss://testnet-passet-hub.polkadot.io');
+  const api = await ApiPromise.create({ provider });
+
+  const accountId = 'SUBSTRATE_ADDRESS_HERE';
+  const publicKey = decodeAddress(accountId);
+  const publicKeyHex = u8aToHex(publicKey);
+
+  const result = await api.call.reviveApi.address(publicKeyHex);
+  console.log('Ethereum address:', result.toHex());
+
+  await api.disconnect();
+}
+
+getEthAddress().catch(console.error);
+"
+```
+
+**Method 2: Use RPC directly**
+If you can make direct RPC calls to the node, use the `revive_address` runtime API:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "state_call",
+  "params": [
+    "ReviveApi_address",
+    "0x<PUBLIC_KEY_HEX>"
+  ]
+}
+```
+
+This conversion is necessary because:
+- Polkadot uses 32-byte AccountId32 (SS58 encoded)
+- Some contracts use 20-byte Ethereum-style addresses (H160)
+- The runtime provides deterministic mapping between them
+
+**Example Workflow:**
+1. User says: "Transfer 100 tokens to 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+2. You read the contract metadata and see `transfer(to: Address, amount: u128)`
+3. You detect `Address` means Ethereum address (20 bytes) needed
+4. You run the conversion script above to get the Ethereum address
+5. You execute: `pop call contract --path . --url wss://testnet-passet-hub.polkadot.io --contract 0x... --message transfer --args 0x<converted-eth-address> 100 --use-wallet`
+
+The user never has to think about address formats!
+
+===========================================
+2. OVERVIEW
+===========================================
+
+2.1 WHAT IS POP CLI?
 --------------------
 Pop CLI is the platform for building powerful Web3 solutions on Polkadot with Rust.
 It transforms the complex landscape of Polkadot development into an effortless and
@@ -1046,29 +1213,22 @@ Dry runs:
 6.3 MULTI-NETWORK DEPLOYMENT
 -----------------------------
 
-Pop CLI supports deployment to any Substrate-based network.
+Pop CLI deployment - ALWAYS use PassetHub.
 
-Common Networks:
-- Local development: ws://localhost:9944
-- PassetHub Testnet (recommended for contracts): wss://testnet-passet-hub.polkadot.io
-- Paseo Testnet: wss://paseo-rpc.dwellir.com
+Networks to use:
+- **PassetHub (REQUIRED for all contract work)**: wss://testnet-passet-hub.polkadot.io
+- Local development (for testing only): ws://localhost:9944
 
-Example - Deploy to Multiple Networks:
+Example - Deploy to PassetHub:
 ```bash
-# Local development
-pop up -p ./my_contract --constructor new --suri //Alice
-
-# PassetHub testnet
+# PassetHub (USE THIS FOR ALL DEPLOYMENTS)
 pop up -p ./my_contract \
   --url wss://testnet-passet-hub.polkadot.io \
   --constructor new \
   --use-wallet
 
-# Custom network
-pop up -p ./my_contract \
-  --url wss://custom-network.io \
-  --constructor new \
-  --use-wallet
+# Local development only (for quick testing)
+pop up -p ./my_contract --constructor new --suri //Alice
 ```
 
 Network Considerations:
@@ -1652,18 +1812,13 @@ Utilities:
 Polkadot:
 - Testnet: wss://testnet-passet-hub.polkadot.io
 
-Polkadot:
+Contract Development Networks:
+- **PassetHub (USE THIS)**: wss://testnet-passet-hub.polkadot.io
+- Local Development: ws://localhost:9944
+
+Parachain Networks (for chain development, NOT contracts):
 - Polkadot: wss://rpc.polkadot.io
 - Kusama: wss://kusama-rpc.polkadot.io
-- Asset Hub (Polkadot): wss://polkadot-asset-hub-rpc.polkadot.io
-- Asset Hub (Kusama): wss://kusama-asset-hub-rpc.polkadot.io
-
-Testnets:
-- Paseo (Testnet): wss://paseo-rpc.dwellir.com
-- Westend: wss://westend-rpc.polkadot.io
-
-Local Development:
-- Default: ws://localhost:9944
 
 10.4 DEFAULT VALUES
 -------------------

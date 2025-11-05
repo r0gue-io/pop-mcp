@@ -65,39 +65,43 @@ Powerful tools for complete Polkadot development:
 
 ## Installation
 
-### Prerequisites
-
-- **Node.js** 18 or higher
-- **Pop CLI** (the server can guide installation if not present)
-
 ### Install the MCP Server
 
+Download the latest pre-built binary for your platform from the [GitHub Releases](https://github.com/r0gue-io/pop-mcp/releases):
+
 ```bash
-npm install -g @pop-cli/mcp-server
+# macOS ARM64 (Apple Silicon)
+curl -L https://github.com/r0gue-io/pop-mcp/releases/latest/download/pop-mcp-server-aarch64-apple-darwin.tar.gz | tar xz
+chmod +x pop-mcp-server-aarch64-apple-darwin
+
+# macOS Intel
+curl -L https://github.com/r0gue-io/pop-mcp/releases/latest/download/pop-mcp-server-x86_64-apple-darwin.tar.gz | tar xz
+chmod +x pop-mcp-server-x86_64-apple-darwin
+
+# Linux
+curl -L https://github.com/r0gue-io/pop-mcp/releases/latest/download/pop-mcp-server-x86_64-unknown-linux-gnu.tar.gz | tar xz
+chmod +x pop-mcp-server-x86_64-unknown-linux-gnu
 ```
 
-Or install locally in your project:
+Move the binary to a location in your PATH (optional):
 
 ```bash
-npm install @pop-cli/mcp-server
+sudo mv pop-mcp-server-* /usr/local/bin/pop-mcp-server
 ```
 
-### Development Setup
+### Build from Source
 
-To work on the server itself:
+To build from source:
 
 ```bash
-# Clone or navigate to the project
+# Clone the repository
+git clone https://github.com/r0gue-io/pop-mcp.git
 cd pop-mcp
 
-# Install dependencies
-npm install
+# Build with Rust
+cargo build --release
 
-# Build the server
-npm run build
-
-# Test with MCP Inspector
-npm run inspector
+# The binary will be at target/release/pop-mcp-server
 ```
 
 ## Configuration
@@ -114,24 +118,7 @@ Add to your Claude Desktop configuration file:
   "mcpServers": {
     "pop-cli": {
       "type": "stdio",
-      "command": "node",
-      "args": [
-        "/absolute/path/to/pop-mcp/build/index.js"
-      ],
-      "env": {}
-    }
-  }
-}
-```
-
-If installed globally via npm:
-
-```json
-{
-  "mcpServers": {
-    "pop-cli": {
-      "type": "stdio",
-      "command": "pop-mcp-server",
+      "command": "/path/to/pop-mcp-server",
       "args": [],
       "env": {}
     }
@@ -139,11 +126,13 @@ If installed globally via npm:
 }
 ```
 
+Replace `/path/to/pop-mcp-server` with the actual path to your binary, or just `pop-mcp-server` if it's in your PATH.
+
 ### Claude Code Configuration
 
 Claude Code is available in VS Code! To use the Pop MCP Server:
 
-#### Option 1: Global Configuration (Recommended)
+#### Global Configuration (Recommended)
 
 Add the MCP server to your global Claude settings file at `~/.claude.json`:
 
@@ -152,24 +141,7 @@ Add the MCP server to your global Claude settings file at `~/.claude.json`:
   "mcpServers": {
     "pop-cli": {
       "type": "stdio",
-      "command": "node",
-      "args": [
-        "/absolute/path/to/pop-mcp/build/index.js"
-      ],
-      "env": {}
-    }
-  }
-}
-```
-
-Or if installed globally via npm:
-
-```json
-{
-  "mcpServers": {
-    "pop-cli": {
-      "type": "stdio",
-      "command": "pop-mcp-server",
+      "command": "/path/to/pop-mcp-server",
       "args": [],
       "env": {}
     }

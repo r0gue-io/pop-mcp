@@ -3,6 +3,14 @@ INK! COMPREHENSIVE DOCUMENTATION
 Smart Contract Development on Polkadot
 ===========================================
 
+🌐 RECOMMENDED TESTNET: PassetHub
+==================================
+**Default Network for ALL Development:**
+- Network: PassetHub Testnet (ParaID 1111)
+- RPC: wss://testnet-passet-hub.polkadot.io
+- Use this for deployment, testing, and contract interactions
+- DO NOT use production/mainnet unless explicitly requested
+
 IMPORTANT: This documentation covers the ink! smart contract language in detail.
 For tooling and workflow automation, see pop-cli-comprehensive-guide.txt.
 
@@ -18,7 +26,7 @@ For the fastest way to get started with ink! development, use Pop CLI:
 2. Create contract: pop new contract my_contract
 3. Build: pop build
 4. Test: pop test
-5. Deploy: pop up
+5. Deploy: pop up contract --url wss://testnet-passet-hub.polkadot.io --use-wallet
 
 See pop-cli-comprehensive-guide.txt for complete Pop CLI documentation.
 

@@ -17,13 +17,28 @@ Pop MCP Server connects your AI assistant (like Claude) to Pop CLI, giving you s
 
 ## Installation Options
 
-### Option A: Install from NPM (Recommended)
+### Option A: Download Pre-built Binary (Recommended)
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/r0gue-io/pop-mcp/releases):
 
 ```bash
-npm install -g @pop-cli/mcp-server
+# macOS ARM64 (Apple Silicon)
+curl -L https://github.com/r0gue-io/pop-mcp/releases/latest/download/pop-mcp-server-aarch64-apple-darwin.tar.gz | tar xz
+chmod +x pop-mcp-server-aarch64-apple-darwin
+sudo mv pop-mcp-server-aarch64-apple-darwin /usr/local/bin/pop-mcp-server
+
+# macOS Intel
+curl -L https://github.com/r0gue-io/pop-mcp/releases/latest/download/pop-mcp-server-x86_64-apple-darwin.tar.gz | tar xz
+chmod +x pop-mcp-server-x86_64-apple-darwin
+sudo mv pop-mcp-server-x86_64-apple-darwin /usr/local/bin/pop-mcp-server
+
+# Linux
+curl -L https://github.com/r0gue-io/pop-mcp/releases/latest/download/pop-mcp-server-x86_64-unknown-linux-gnu.tar.gz | tar xz
+chmod +x pop-mcp-server-x86_64-unknown-linux-gnu
+sudo mv pop-mcp-server-x86_64-unknown-linux-gnu /usr/local/bin/pop-mcp-server
 ```
 
-Then configure Claude Desktop with just:
+Then configure Claude Desktop with:
 
 ```json
 {
@@ -40,7 +55,7 @@ Then configure Claude Desktop with just:
 
 ### Option B: Build from Source
 
-If installing from source or for development:
+If you want to build from source or contribute to development:
 
 #### Step 1: Clone and Build (2 minutes)
 
@@ -49,15 +64,11 @@ If installing from source or for development:
 git clone https://github.com/r0gue-io/pop-mcp.git
 cd pop-mcp
 
-# Install dependencies and build
-npm install
-npm run build
+# Build with Rust
+cargo build --release
 ```
 
-You should see:
-```
-✅ Build output exists
-```
+The binary will be at `target/release/pop-mcp-server`
 
 #### Step 2: Configure Claude Desktop (2 minutes)
 
@@ -80,16 +91,14 @@ You should see:
    touch ~/Library/Application\ Support/Claude/claude_desktop_config.json
    ```
 
-2. Add this configuration (replace with your actual absolute path):
+2. Add this configuration (replace with your actual path):
    ```json
    {
      "mcpServers": {
        "pop-cli": {
          "type": "stdio",
-         "command": "node",
-         "args": [
-           "/absolute/path/to/pop-mcp/build/index.js"
-         ],
+         "command": "/absolute/path/to/pop-mcp/target/release/pop-mcp-server",
+         "args": [],
          "env": {}
        }
      }
@@ -107,13 +116,12 @@ You can also use this MCP server directly in VS Code with the Claude Code extens
 2. **Configure in Global Claude Settings**:
    Edit `~/.claude.json` (create if it doesn't exist):
 
-For globally installed:
 ```json
 {
   "mcpServers": {
     "pop-cli": {
       "type": "stdio",
-      "command": "pop-mcp-server",
+      "command": "/path/to/pop-mcp-server",
       "args": [],
       "env": {}
     }
@@ -121,7 +129,11 @@ For globally installed:
 }
 ```
 
-For local build:
+Replace `/path/to/pop-mcp-server` with:
+- `pop-mcp-server` if installed to PATH
+- `/absolute/path/to/target/release/pop-mcp-server` if built from source
+
+Old example for reference (Node.js - no longer used):
 ```json
 {
   "mcpServers": {
@@ -161,7 +173,7 @@ Then try:
 Is Pop CLI installed?
 ```
 
-Claude should check and report that Pop CLI 0.11.0 is installed.
+If Pop CLI is not installed, Claude can guide you through the installation process using the `install_pop_instructions` tool.
 
 ### Step 4: Try It Out!
 

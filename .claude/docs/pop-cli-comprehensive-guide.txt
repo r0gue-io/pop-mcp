@@ -43,7 +43,7 @@ NETWORK CONFIGURATION:
 
 Example deployment command:
 ```bash
-pop up contract --url wss://testnet-passet-hub.polkadot.io --use-wallet
+pop up --url wss://testnet-passet-hub.polkadot.io --use-wallet
 ```
 
 1.1 NEVER REQUEST PRIVATE KEYS

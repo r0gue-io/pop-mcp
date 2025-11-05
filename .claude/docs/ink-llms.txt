@@ -26,7 +26,7 @@ For the fastest way to get started with ink! development, use Pop CLI:
 2. Create contract: pop new contract my_contract
 3. Build: pop build
 4. Test: pop test
-5. Deploy: pop up contract --url wss://testnet-passet-hub.polkadot.io --use-wallet
+5. Deploy: pop up --url wss://testnet-passet-hub.polkadot.io --use-wallet
 
 See pop-cli-comprehensive-guide.txt for complete Pop CLI documentation.
 

@@ -46,6 +46,13 @@ Example deployment command:
 pop up --url wss://testnet-passet-hub.polkadot.io --use-wallet
 ```
 
+**IMPORTANT: After deployment, ALWAYS capture and save the contract address from the output!**
+The `pop up` command will return the deployed contract address in its output. You MUST:
+1. Read the deployment output carefully
+2. Extract the contract address
+3. Save it for future interactions with the contract
+4. Provide the address to the user for their records
+
 1.1 NEVER REQUEST PRIVATE KEYS
 -------------------------------
 **ALWAYS use `--use-wallet` flag for ALL deployment and transaction operations.**

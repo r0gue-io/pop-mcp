@@ -15,6 +15,8 @@ jobs:
   build-binaries:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       matrix:
         include:
@@ -66,6 +68,8 @@ jobs:
     name: Create Release
     needs: build-binaries
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -87,55 +91,62 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R artifacts
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.get_version.outputs.version }}
-          name: Release ${{ steps.get_version.outputs.version }}
-          draft: false
-          prerelease: false
-          files: |
-            artifacts/binary-*/*.tar.gz
-            artifacts/binary-*/*.sha256
-          body: |
-            ## Pop MCP Server ${{ steps.get_version.outputs.version }}
+      - name: Prepare files for release
+        run: |
+          mkdir -p release-files
+          find artifacts -name "*.tar.gz" -exec cp {} release-files/ \;
+          find artifacts -name "*.sha256" -exec cp {} release-files/ \;
+          ls -la release-files/
 
-            Download the binary for your platform below.
+      - name: Create release notes
+        run: |
+          cat > release_notes.md << 'EOF'
+          ## Pop MCP Server ${{ steps.get_version.outputs.version }}
 
-            ### Installation
+          Download the binary for your platform below.
 
-            ```bash
-            # macOS ARM64 (Apple Silicon)
-            curl -L https://github.com/r0gue-io/pop-mcp/releases/download/${{ steps.get_version.outputs.version }}/pop-mcp-server-aarch64-apple-darwin.tar.gz | tar xz
-            chmod +x pop-mcp-server-aarch64-apple-darwin
-            sudo mv pop-mcp-server-aarch64-apple-darwin /usr/local/bin/pop-mcp-server
+          ### Installation
 
-            # macOS Intel
-            curl -L https://github.com/r0gue-io/pop-mcp/releases/download/${{ steps.get_version.outputs.version }}/pop-mcp-server-x86_64-apple-darwin.tar.gz | tar xz
-            chmod +x pop-mcp-server-x86_64-apple-darwin
-            sudo mv pop-mcp-server-x86_64-apple-darwin /usr/local/bin/pop-mcp-server
+          ```bash
+          # macOS ARM64 (Apple Silicon)
+          curl -L https://github.com/r0gue-io/pop-mcp/releases/download/${{ steps.get_version.outputs.version }}/pop-mcp-server-aarch64-apple-darwin.tar.gz | tar xz
+          chmod +x pop-mcp-server-aarch64-apple-darwin
+          sudo mv pop-mcp-server-aarch64-apple-darwin /usr/local/bin/pop-mcp-server
 
-            # Linux
-            curl -L https://github.com/r0gue-io/pop-mcp/releases/download/${{ steps.get_version.outputs.version }}/pop-mcp-server-x86_64-unknown-linux-gnu.tar.gz | tar xz
-            chmod +x pop-mcp-server-x86_64-unknown-linux-gnu
-            sudo mv pop-mcp-server-x86_64-unknown-linux-gnu /usr/local/bin/pop-mcp-server
-            ```
+          # macOS Intel
+          curl -L https://github.com/r0gue-io/pop-mcp/releases/download/${{ steps.get_version.outputs.version }}/pop-mcp-server-x86_64-apple-darwin.tar.gz | tar xz
+          chmod +x pop-mcp-server-x86_64-apple-darwin
+          sudo mv pop-mcp-server-x86_64-apple-darwin /usr/local/bin/pop-mcp-server
 
-            ### Configuration
+          # Linux
+          curl -L https://github.com/r0gue-io/pop-mcp/releases/download/${{ steps.get_version.outputs.version }}/pop-mcp-server-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          chmod +x pop-mcp-server-x86_64-unknown-linux-gnu
+          sudo mv pop-mcp-server-x86_64-unknown-linux-gnu /usr/local/bin/pop-mcp-server
+          ```
 
-            Add to your `~/.claude.json`:
+          ### Configuration
 
-            ```json
-            {
-              "mcpServers": {
-                "pop-cli": {
-                  "type": "stdio",
-                  "command": "pop-mcp-server",
-                  "args": [],
-                  "env": {}
-                }
+          Add to your `~/.claude.json`:
+
+          ```json
+          {
+            "mcpServers": {
+              "pop-cli": {
+                "type": "stdio",
+                "command": "pop-mcp-server",
+                "args": [],
+                "env": {}
               }
             }
-            ```
+          }
+          ```
+          EOF
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ${{ steps.get_version.outputs.version }} \
+            --title "Release ${{ steps.get_version.outputs.version }}" \
+            --notes-file release_notes.md \
+            release-files/*

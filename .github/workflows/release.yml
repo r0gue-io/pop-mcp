@@ -144,7 +144,7 @@ jobs:
 
       - name: Create GitHub Release
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           gh release create ${{ steps.get_version.outputs.version }} \
             --title "Release ${{ steps.get_version.outputs.version }}" \

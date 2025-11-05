@@ -1,0 +1,1936 @@
+===========================================
+POP CLI COMPREHENSIVE GUIDE
+Complete Reference for LLMs
+===========================================
+
+This guide provides comprehensive documentation about Pop CLI, the all-in-one tool
+for Polkadot development. Pop CLI simplifies building, testing, and deploying both
+smart contracts (using ink!) and appchains on Polkadot.
+
+RELATED DOCUMENTATION:
+- ink-llms.txt: Comprehensive ink! language guide
+- ink-technical-guide.txt: Deep technical ink! reference
+- xcm-comprehensive-guide.txt: Cross-chain messaging guide (theory and patterns)
+- xcm-ink-examples-guide.txt: Real-world XCM contract examples with complete code
+
+===========================================
+1. OVERVIEW
+===========================================
+
+1.1 WHAT IS POP CLI?
+--------------------
+Pop CLI is the platform for building powerful Web3 solutions on Polkadot with Rust.
+It transforms the complex landscape of Polkadot development into an effortless and
+powerful experience, whether you're developing a chain or smart contract.
+
+GitHub: https://github.com/r0gue-io/pop-cli
+Documentation: https://learn.onpop.io
+
+Key Features:
+- Interactive command-line interface with guided workflows
+- Smart contract development (ink! v6 support by default)
+- Appchain/parachain development (Polkadot SDK integration)
+- Built-in testing and benchmarking tools
+- Deployment automation for local and public networks
+- Browser wallet integration for secure signing
+- Template system for quick project initialization
+
+1.2 WHY USE POP CLI?
+--------------------
+- Simplifies Polkadot's complexity with intuitive commands
+- Fastest way to scaffold new projects (contracts or chains)
+- Handles build configuration automatically
+- Integrated testing (unit tests and e2e tests)
+- Multi-network deployment support
+- Active community and frequent updates
+
+===========================================
+2. INSTALLATION
+===========================================
+
+2.1 INSTALLATION METHODS
+------------------------
+
+Method 1: Homebrew (macOS and Linux)
+```bash
+# Install Homebrew if not already installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Add Homebrew to PATH (if needed)
+# macOS (Apple Silicon):
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
+
+# Linux:
+echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.profile
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+
+# Verify Homebrew
+brew --version
+
+# Install Pop CLI
+brew install r0gue-io/pop-cli/pop
+```
+
+Method 2: Build from Source (Any OS)
+```bash
+# Install Rust (if not already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Build and install Pop CLI
+cargo install --force --locked pop-cli
+```
+
+2.2 INITIAL SETUP
+-----------------
+After installation, set up your development environment:
+
+```bash
+pop install
+```
+
+This command installs necessary dependencies for contract and chain development.
+
+2.3 VERSION CONSIDERATIONS
+--------------------------
+- Latest releases target ink! v6 by default
+- For ink! v5 support, install version 0.10.0:
+  ```bash
+  cargo install --locked pop-cli --version 0.10.0
+  ```
+
+2.4 VERIFY INSTALLATION
+-----------------------
+```bash
+pop --version
+pop --help
+```
+
+===========================================
+3. SMART CONTRACT DEVELOPMENT (ink!)
+===========================================
+
+Pop CLI provides a complete workflow for developing ink! smart contracts on Polkadot.
+For detailed ink! language features, see ink-llms.txt and ink-technical-guide.txt.
+
+3.1 CREATE NEW CONTRACT
+-----------------------
+
+View Available Templates:
+```bash
+pop new contract
+```
+
+Available templates include:
+- Standard contract (basic flipper example)
+- ERC20 token
+- ERC721 (NFT)
+- ERC1155 (multi-token)
+- And more...
+
+Create Contract from Template:
+```bash
+# Interactive mode (recommended)
+pop new contract
+
+# Non-interactive with specific template
+pop new contract my_erc20 --template erc20
+
+# Creates directory structure:
+my_erc20/
+├── Cargo.toml
+├── lib.rs
+└── ... (contract files)
+```
+
+Then open the generated directory to start developing your contract.
+
+3.2 BUILD CONTRACT
+------------------
+
+Pop CLI handles all ink! build complexity automatically, including:
+- RISC-V compilation target configuration
+- PolkaVM bytecode generation
+- Metadata generation
+- Optimization settings
+
+Basic Build:
+```bash
+# Must be inside contract directory
+cd my_contract
+pop build
+```
+
+Release Build (optimized):
+```bash
+pop build --release
+```
+
+Build Output:
+- target/ink/my_contract.contract (bundle with metadata)
+- target/ink/my_contract.wasm (compiled bytecode)
+- target/ink/my_contract.json (metadata)
+
+Behind the Scenes:
+Pop CLI wraps cargo-contract and handles:
+- Nightly toolchain selection
+- RISC-V target configuration
+- Build standard library from source
+- Metadata generation and bundling
+
+3.3 TEST CONTRACT
+-----------------
+
+Pop CLI supports both unit tests and end-to-end (e2e) tests.
+
+Run Unit Tests:
+```bash
+# Must be inside contract directory
+pop test
+```
+
+This runs standard Rust unit tests defined in your contract code.
+
+Run End-to-End Tests:
+```bash
+# Automatically spins up local chain
+pop test --e2e
+
+# Use your own local chain
+pop test --e2e --node ../my-chain
+```
+
+E2E tests require a running blockchain node. Pop CLI can automatically
+launch an ink-node instance for testing.
+
+Testing Best Practices:
+- Write unit tests for individual functions
+- Use e2e tests to verify full contract lifecycle
+- Test error conditions and edge cases
+- Verify events are emitted correctly
+
+For detailed ink! testing patterns, see ink-llms.txt section on testing.
+
+3.4 DEPLOY CONTRACT (pop up)
+-----------------------------
+
+The `pop up` command deploys and instantiates contracts.
+
+LOCAL DEPLOYMENT (Default):
+```bash
+# Automatic local node launch
+pop up -p ./path-to-contract \
+  --constructor new \
+  --args false \
+  --suri //Alice
+
+# If no --url provided, automatically launches ink-node at ws://localhost:9944
+```
+
+Command Parameters:
+- `-p, --path`: Path to contract directory
+- `--constructor`: Constructor name to call (default: "new")
+- `--args`: Constructor arguments (space-separated)
+- `--suri`: Secret key URI for signing (default: //Alice)
+- `--url`: RPC endpoint (optional, defaults to local node)
+- `--dry-run`: Estimate gas without submitting transaction
+- `--upload-only`: Only upload code, don't instantiate
+
+Example Output:
+```
+┌   Pop CLI : Deploy a smart contract
+│
+◐  Doing a dry run to estimate the gas...
+●  Gas limit Weight { ref_time: 264725731, proof_size: 16689 }
+│
+◇  Contract deployed and instantiated: The Contract Address is "5CLPm1CeUvJhZ8GCDZCR7nWZ2m3XXe4X5MtAQK69zEjut36A"
+│
+└  Deployment complete
+```
+
+SAVE THE CONTRACT ADDRESS - you'll need it to interact with the contract.
+
+Stop Local Node (if needed):
+```bash
+# Find process
+lsof -i :9944
+
+# Kill process (replace with actual PID)
+kill -9 <PID>
+```
+
+DEPLOY TO CUSTOM/PUBLIC NETWORK:
+```bash
+pop up -p ./my_contract \
+  --url ws://<network-endpoint> \
+  --constructor new \
+  --args arg1 arg2 \
+  --suri <your-SURI>
+
+# Example: Deploy to Pop Network testnet
+pop up -p ./my_contract \
+  --url wss://rpc.popnetwork.xyz \
+  --constructor new \
+  --args false \
+  --suri "//Alice"
+```
+
+BROWSER WALLET SIGNING:
+Instead of exposing private keys with --suri, use browser wallet:
+```bash
+pop up -p ./my_contract \
+  --url wss://rpc.popnetwork.xyz \
+  --constructor new \
+  --args false \
+  --use-wallet
+
+# Supported wallets: PolkadotJS, Talisman, SubWallet
+```
+
+GAS ESTIMATION:
+Always estimate gas before deployment to ensure sufficient funds:
+```bash
+pop up --constructor new --args false --suri //Alice --dry-run
+```
+
+Output:
+```
+Gas limit estimate: Weight { ref_time: 146346224, proof_size: 16689 }
+```
+
+UPLOAD-ONLY MODE:
+Upload contract code without instantiating (useful for factories):
+```bash
+pop up -p ./my_contract --upload-only --suri //Alice
+```
+
+3.5 CALL CONTRACT
+-----------------
+
+Interact with deployed contracts using `pop call contract`.
+
+INTERACTIVE MODE (Recommended):
+```bash
+pop call
+
+# You'll be prompted to:
+# 1. Select contract path
+# 2. Enter contract address
+# 3. Choose message to call
+# 4. Provide message arguments
+```
+
+NON-INTERACTIVE MODE:
+```bash
+pop call contract \
+  -p ./flipper \
+  --contract 5CLPm1CeUvJhZ8GCDZCR7nWZ2m3XXe4X5MtAQK69zEjut36A \
+  --message get \
+  --suri //Alice
+
+# For read-only queries (no state change)
+```
+
+Execute State-Changing Transaction:
+```bash
+pop call contract \
+  -p ./flipper \
+  --contract 5CLPm1CeUvJhZ8GCDZCR7nWZ2m3XXe4X5MtAQK69zEjut36A \
+  --message flip \
+  --suri //Alice \
+  -x  # Execute flag required for state changes
+
+# Output shows events and gas used
+```
+
+Dry Run for Gas Estimation:
+```bash
+pop call contract \
+  -p ./flipper \
+  --contract <ADDRESS> \
+  --message flip \
+  --suri //Alice \
+  -x --dry-run
+```
+
+Command Parameters:
+- `-p, --path`: Path to contract directory
+- `--contract`: Contract address (from deployment)
+- `--message`: Message/function name to call
+- `--args`: Message arguments (space-separated)
+- `--suri`: Signer account
+- `-x, --execute`: Submit transaction (required for state changes)
+- `--dry-run`: Estimate gas without submitting
+- `--url`: RPC endpoint (default: ws://localhost:9944)
+- `--use-wallet`: Use browser wallet for signing
+
+Read-Only vs State-Changing:
+- Read-only queries return immediately without gas costs
+- State-changing calls require `-x` flag and consume gas
+- Always use --dry-run first to estimate costs
+
+Example Workflow:
+```bash
+# 1. Query current state (free)
+pop call contract -p ./flipper --contract <ADDR> --message get --suri //Alice
+
+# Result: Ok(false)
+
+# 2. Change state (costs gas)
+pop call contract -p ./flipper --contract <ADDR> --message flip --suri //Alice -x
+
+# 3. Verify change
+pop call contract -p ./flipper --contract <ADDR> --message get --suri //Alice
+
+# Result: Ok(true)
+```
+
+3.6 SECURE TRANSACTION SIGNING
+-------------------------------
+
+Pop CLI supports browser wallet integration for secure signing without
+exposing private keys in the command line.
+
+Supported Wallets:
+- PolkadotJS extension
+- Talisman
+- SubWallet
+
+Usage:
+```bash
+# Instead of --suri, use --use-wallet or -w
+pop up -p ./my_contract --use-wallet
+
+pop call contract -p ./flipper --contract <ADDR> --message flip -w -x
+```
+
+The browser extension will prompt you to review and sign the transaction.
+
+===========================================
+4. APPCHAIN/PARACHAIN DEVELOPMENT
+===========================================
+
+Pop CLI provides complete tooling for building Polkadot appchains (parachains).
+
+4.1 CREATE NEW CHAIN
+--------------------
+
+Interactive Prompt:
+```bash
+pop new chain
+
+# You'll be prompted to select from templates:
+# - Pop Templates:
+#   - Standard
+#   - Assets (asset management pallet)
+#   - Contracts (ink! smart contracts support)
+# - OpenZeppelin:
+#   - Generic Runtime Template
+#   - EVM Template
+# - Parity:
+#   - Polkadot SDK's Parachain Template
+```
+
+Available Templates:
+1. Pop Standard: Basic chain with essential pallets
+2. Pop Assets: Includes pallet-assets for token management
+3. Pop Contracts: Includes pallet-contracts for ink! smart contracts
+4. OpenZeppelin Generic: Modular runtime template
+5. OpenZeppelin EVM: EVM-compatible chain
+6. Parity Parachain Template: Official Polkadot SDK template
+
+Directory Structure (example):
+```
+my-chain/
+├── Cargo.toml
+├── node/           # Node implementation
+├── runtime/        # Runtime logic (pallets)
+├── pallets/        # Custom pallets
+└── scripts/        # Build scripts
+```
+
+4.2 BUILD CHAIN
+---------------
+
+Basic Build:
+```bash
+cd my-chain
+pop build
+
+# Builds in release mode by default
+```
+
+Build from Outside Directory:
+```bash
+pop build -p ./my-chain
+```
+
+Build for Relay Chain Onboarding:
+```bash
+pop build -p ./my-chain --para_id 2000
+
+# Generates:
+# - Chain spec
+# - WebAssembly runtime
+# - Genesis state for registration
+```
+
+Build Output:
+```
+┌   Pop CLI : Building a chain
+│
+   Compiling parachain-template-runtime v0.1.0
+   Compiling parachain-template-node v0.1.0
+    Finished release [optimized] target(s) in 1m 20s
+
+└  Build Completed Successfully!
+```
+
+What Gets Built:
+- Node binary (executable)
+- Runtime WebAssembly (runtime logic)
+- Chain specification files
+
+4.3 LAUNCH CHAIN
+----------------
+
+Launch Development Chain:
+```bash
+pop up chain
+
+# Interactive prompts guide you through:
+# - Selecting chain to launch
+# - Configuration options
+```
+
+The chain will start producing blocks locally for development.
+
+Common Launch Options:
+- Development mode (single validator)
+- Local testnet mode (multiple validators)
+- Connect to relay chain testnet
+
+4.4 CALL CHAIN (Interact with Runtime)
+---------------------------------------
+
+The `pop call chain` command allows interaction with any Polkadot chain's
+runtime, including querying storage, reading constants, and executing extrinsics.
+
+INTERACTIVE MODE (Recommended):
+```bash
+pop call chain
+
+# Prompts:
+# 1. Select chain (predefined list or custom URL)
+# 2. Select pallet
+# 3. Choose operation type:
+#    - Execute extrinsic (state change)
+#    - Query storage (read state)
+#    - Read constant (metadata)
+# 4. Provide arguments
+# 5. Sign transaction (for extrinsics)
+```
+
+Features:
+- Type-to-filter for quick navigation
+- Inline documentation for pallets/functions
+- Clear labels: [EXTRINSIC], [STORAGE], [CONSTANT]
+- Predefined actions for common operations
+
+NON-INTERACTIVE MODE:
+
+Execute Extrinsic:
+```bash
+pop call chain \
+  --pallet System \
+  --function remark \
+  --args "0x11" \
+  --url ws://localhost:9944 \
+  --suri //Alice \
+  --sudo  # Wrap in sudo.sudo() call
+```
+
+Query Storage:
+```bash
+# Plain storage value
+pop call chain \
+  --pallet Sudo \
+  --function Key \
+  --url wss://pas-rpc.stakeworld.io \
+  -y  # Skip confirmation
+
+# Storage map (requires key argument)
+pop call chain \
+  --pallet System \
+  --function Account \
+  --args 0xb815821c5b300d1667d5fc081c06cc4b6addffb90464d68d871ee363b01a127c \
+  --url wss://pas-rpc.stakeworld.io \
+  -y
+```
+
+Read Constants:
+```bash
+pop call chain \
+  --pallet System \
+  --function Version \
+  --url wss://pas-rpc.stakeworld.io \
+  -y
+
+pop call chain \
+  --pallet System \
+  --function BlockHashCount \
+  --url wss://pas-rpc.stakeworld.io \
+  -y
+```
+
+Command Parameters:
+- `--pallet`: Pallet name (case-sensitive, e.g., "Balances", "System")
+- `--function`: Function/storage/constant name (snake_case)
+- `--args`: Arguments as space-separated values or hex strings
+- `--url`: RPC endpoint
+- `--suri`: Secret URI for signing (extrinsics only)
+- `--sudo`: Wrap call in sudo.sudo() (requires sudo pallet)
+- `--use-wallet, -w`: Use browser wallet for signing
+- `--skip-confirm, -y`: Skip confirmation prompts
+- `--call`: Submit raw SCALE-encoded call data
+
+Direct Call Data Submission:
+```bash
+# Submit pre-encoded SCALE call data
+pop call chain \
+  --call 0x00000411 \
+  --url ws://localhost:9944 \
+  --suri //Alice
+```
+
+Common Examples:
+
+Check Account Balance:
+```bash
+pop call chain \
+  --pallet System \
+  --function Account \
+  --args "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY" \
+  --url ws://localhost:9944
+```
+
+Query Current Block Number:
+```bash
+pop call chain \
+  --pallet System \
+  --function Number \
+  --url ws://localhost:9944
+```
+
+Transfer with Wallet:
+```bash
+pop call chain \
+  --pallet Balances \
+  --function transfer_keep_alive \
+  --args "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty" "1000000000000" \
+  --url wss://rpc.polkadot.io \
+  --use-wallet
+```
+
+Sudo Call with Auto-confirm:
+```bash
+pop call chain \
+  --pallet System \
+  --function set_code \
+  --args "./runtime.wasm" \
+  --url ws://localhost:9944 \
+  --suri //Alice \
+  --sudo \
+  -y
+```
+
+4.5 BENCHMARKING
+----------------
+
+Pop CLI provides interactive benchmarking for pallets and extrinsics.
+
+Basic Benchmarking:
+```bash
+pop bench pallet
+
+# Interactive prompts guide you through:
+# 1. Select build profile (Release recommended)
+# 2. Select runtime (if multiple available)
+# 3. Configure genesis builder policy
+# 4. Select pallets to benchmark
+# 5. Select specific extrinsics (optional)
+# 6. Configure parameters
+# 7. Save results
+```
+
+Requirements:
+- Runtime built with `runtime-benchmarks` feature
+- `frame-omni-bencher` binary (auto-installed by Pop CLI)
+
+Manual Runtime Specification:
+```bash
+pop bench pallet --runtime=target/release/pop-runtime-devnet.wasm
+```
+
+Skip Auto-build:
+```bash
+pop bench pallet --no-build  # or -n
+```
+
+Genesis Configuration:
+```bash
+# Use runtime genesis preset
+pop bench pallet \
+  --runtime=target/release/pop-runtime-devnet.wasm \
+  --genesis-builder=runtime \
+  --genesis-builder-preset=development
+```
+
+Genesis Builder Options:
+- `none`: No genesis state
+- `runtime`: Use runtime's genesis preset (development, local_testnet, etc.)
+
+Select Specific Pallet/Extrinsics:
+```bash
+# Benchmark specific pallet
+pop bench pallet --pallet=pallet_balances
+
+# Benchmark specific extrinsics
+pop bench pallet \
+  --pallet=pallet_balances \
+  --extrinsic=transfer_keep_alive,transfer_allow_death
+```
+
+Parameter Configuration:
+Key parameters (can be set via prompts or flags):
+- Steps: Number of steps (default: 50)
+- Repeats: Repeat count (default: 20)
+- Map size: Storage map size (default: 1000000)
+- Database cache size: DB cache in MB (default: 1024)
+- Additional trie layer: Extra trie layers (default: 2)
+
+Skip Parameter Prompts:
+```bash
+pop bench pallet --skip-parameters
+```
+
+Save Results:
+```bash
+# Weight output file
+pop bench pallet --output=./weights.rs
+
+# Parameter file (TOML format)
+# Saves to pop-bench.toml by default
+```
+
+Load Parameters from File:
+```bash
+pop bench pallet -f pop-bench.toml  # or --bench-file
+```
+
+Example Parameter File (pop-bench.toml):
+```toml
+version = "1"
+pallet = "pallet_timestamp"
+extrinsic = "*"
+exclude_pallets = []
+all = false
+steps = 50
+lowest_range_values = []
+highest_range_values = []
+repeat = 20
+runtime = "target/release/runtime.wasm"
+genesis_builder = "Runtime"
+genesis_builder_preset = "development"
+database_cache_size = 1024
+worst_case_map_values = 1000000
+additional_trie_layers = 2
+```
+
+Advanced Options:
+```bash
+pop bench --help  # See all available flags
+```
+
+Why Benchmark?
+- Accurate weight calculations for extrinsics
+- Optimize runtime performance
+- Required for production chains
+- Ensures proper fee calculation
+
+4.6 ADDITIONAL CHAIN UTILITIES
+-------------------------------
+
+Build Chain Spec:
+```bash
+pop build spec
+```
+
+Build Deterministic Runtime:
+```bash
+pop build --deterministic
+```
+
+Hash Utility:
+```bash
+pop hash <data>
+```
+
+Address Conversion:
+```bash
+pop convert address <address>
+```
+
+Test Runtime Upgrades:
+```bash
+pop test runtime-upgrade
+```
+
+4.7 DEPLOY TO PASEO TESTNET
+----------------------------
+
+Paseo is a Polkadot testnet for parachain testing. Pop CLI provides
+guided deployment workflows.
+
+See Pop documentation for detailed deployment guides:
+https://learn.onpop.io/chains/launch-a-chain
+
+Key Steps:
+1. Build chain with parachain ID
+2. Generate chain spec and genesis
+3. Acquire coretime on Paseo
+4. Register parachain
+5. Start collator nodes
+
+===========================================
+5. COMMON WORKFLOWS
+===========================================
+
+5.1 COMPLETE SMART CONTRACT WORKFLOW
+-------------------------------------
+
+```bash
+# 1. Create new contract
+pop new contract my_token --template erc20
+
+# 2. Navigate to project
+cd my_token
+
+# 3. Build contract
+pop build --release
+
+# 4. Run tests
+pop test
+
+# 5. Deploy to local node (auto-launched)
+pop up --constructor new --args "1000000" --suri //Alice
+
+# Save contract address from output
+
+# 6. Call contract (read)
+pop call contract \
+  -p . \
+  --contract <ADDRESS> \
+  --message balanceOf \
+  --args 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
+  --suri //Alice
+
+# 7. Call contract (write)
+pop call contract \
+  -p . \
+  --contract <ADDRESS> \
+  --message transfer \
+  --args 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty 1000 \
+  --suri //Alice \
+  -x
+
+# 8. Deploy to testnet
+pop up \
+  -p . \
+  --url wss://rpc.popnetwork.xyz \
+  --constructor new \
+  --args "1000000" \
+  --use-wallet
+```
+
+5.2 COMPLETE APPCHAIN WORKFLOW
+-------------------------------
+
+```bash
+# 1. Create new chain
+pop new chain
+
+# Select template (e.g., Pop Standard)
+# Enter chain name: my_chain
+
+# 2. Navigate to project
+cd my_chain
+
+# 3. Build chain
+pop build
+
+# 4. Launch development chain
+pop up chain
+
+# In another terminal:
+
+# 5. Interact with chain
+pop call chain
+
+# 6. Make changes to runtime
+# Edit runtime/src/lib.rs
+
+# 7. Rebuild
+pop build
+
+# 8. Test runtime upgrade
+pop test runtime-upgrade
+
+# 9. Benchmark pallets
+pop bench pallet
+
+# 10. Prepare for testnet deployment
+pop build --para_id 2000
+```
+
+5.3 CROSS-CONTRACT CALLS (ink!)
+--------------------------------
+
+Contracts can call each other using the contract's address and interface.
+
+Example:
+```rust
+use ink::env::call::{build_call, ExecutionInput, Selector};
+
+#[ink(message)]
+pub fn call_other_contract(&mut self, other: AccountId) -> bool {
+    build_call::<Environment>()
+        .call(other)
+        .exec_input(
+            ExecutionInput::new(Selector::new([0xDE, 0xAD, 0xBE, 0xEF]))
+                .push_arg(arg1)
+        )
+        .returns::<bool>()
+        .invoke()
+}
+```
+
+Deploy both contracts, then:
+```bash
+# Call contract that calls another
+pop call contract \
+  -p ./caller_contract \
+  --contract <CALLER_ADDRESS> \
+  --message call_other_contract \
+  --args <CALLEE_ADDRESS> \
+  --suri //Alice \
+  -x
+```
+
+For detailed cross-contract patterns, see ink-llms.txt.
+
+5.4 SMART CONTRACTS ON CUSTOM CHAIN
+------------------------------------
+
+Deploy ink! contracts to your custom appchain if it includes pallet-contracts:
+
+```bash
+# 1. Create chain with contracts support
+pop new chain
+# Select: Pop Contracts template
+
+# 2. Build and launch chain
+cd my_chain
+pop build
+pop up chain
+
+# In another terminal:
+
+# 3. Create and build contract
+cd ..
+pop new contract my_contract
+cd my_contract
+pop build
+
+# 4. Deploy to your custom chain
+pop up \
+  -p . \
+  --url ws://localhost:9944 \
+  --constructor new \
+  --suri //Alice
+
+# 5. Interact with contract
+pop call contract \
+  -p . \
+  --contract <ADDRESS> \
+  --message get \
+  --suri //Alice
+```
+
+===========================================
+6. ADVANCED FEATURES
+===========================================
+
+6.1 BROWSER WALLET INTEGRATION
+-------------------------------
+
+Pop CLI integrates with browser extension wallets for secure transaction signing.
+
+Setup:
+1. Install browser extension (PolkadotJS, Talisman, or SubWallet)
+2. Create or import account
+3. Ensure extension is unlocked
+
+Usage:
+```bash
+# For contract deployment
+pop up -p ./my_contract --use-wallet
+
+# For contract calls
+pop call contract \
+  -p ./my_contract \
+  --contract <ADDRESS> \
+  --message transfer \
+  --args <recipient> 1000 \
+  -w -x  # -w is shorthand for --use-wallet
+
+# For chain calls
+pop call chain \
+  --pallet Balances \
+  --function transfer_keep_alive \
+  --args <recipient> 1000000000000 \
+  --url ws://localhost:9944 \
+  --use-wallet
+```
+
+The browser will prompt you to review and approve each transaction.
+
+Benefits:
+- Private keys never exposed in terminal
+- Visual transaction review
+- Multi-signature support (depending on wallet)
+- Account management in familiar UI
+
+6.2 DRY RUN / GAS ESTIMATION
+-----------------------------
+
+Always estimate gas before executing transactions to avoid out-of-gas errors.
+
+Contract Deployment:
+```bash
+pop up \
+  --constructor new \
+  --args false \
+  --suri //Alice \
+  --dry-run
+
+# Output: Gas limit estimate: Weight { ref_time: 146346224, proof_size: 16689 }
+```
+
+Contract Calls:
+```bash
+pop call contract \
+  -p ./flipper \
+  --contract <ADDRESS> \
+  --message flip \
+  --suri //Alice \
+  -x --dry-run
+```
+
+Dry runs:
+- Simulate execution without submitting transaction
+- Return gas estimates
+- Show potential errors before spending gas
+- Free to execute
+
+6.3 MULTI-NETWORK DEPLOYMENT
+-----------------------------
+
+Pop CLI supports deployment to any Substrate-based network.
+
+Common Networks:
+- Local development: ws://localhost:9944
+- Pop Network Testnet: wss://rpc.popnetwork.xyz
+- Contracts on Polkadot Asset Hub: wss://polkadot-asset-hub-rpc.polkadot.io
+- Paseo Testnet: wss://paseo-rpc.dwellir.com
+
+Example - Deploy to Multiple Networks:
+```bash
+# Local development
+pop up -p ./my_contract --constructor new --suri //Alice
+
+# Pop Network testnet
+pop up -p ./my_contract \
+  --url wss://rpc.popnetwork.xyz \
+  --constructor new \
+  --use-wallet
+
+# Custom network
+pop up -p ./my_contract \
+  --url wss://custom-network.io \
+  --constructor new \
+  --use-wallet
+```
+
+Network Considerations:
+- Different networks may have different:
+  - Gas costs
+  - Block times
+  - Supported features
+  - Existential deposits
+- Test thoroughly on testnet before mainnet
+- Ensure accounts are funded on target network
+
+6.4 SCRIPT AUTOMATION
+---------------------
+
+Pop CLI commands can be scripted for CI/CD and automation.
+
+Example Deployment Script:
+```bash
+#!/bin/bash
+set -e
+
+# Build contract
+cd ./my_contract
+pop build --release
+
+# Deploy to testnet (skip confirmations)
+CONTRACT_ADDRESS=$(pop up \
+  --url wss://testnet.io \
+  --constructor new \
+  --args "1000000" \
+  --suri "$SECRET_KEY" \
+  -y \
+  | grep "Contract Address" \
+  | cut -d'"' -f2)
+
+echo "Deployed to: $CONTRACT_ADDRESS"
+
+# Initialize contract
+pop call contract \
+  -p . \
+  --contract "$CONTRACT_ADDRESS" \
+  --message initialize \
+  --suri "$SECRET_KEY" \
+  -x -y
+
+echo "Contract initialized successfully"
+```
+
+Use `--skip-confirm` or `-y` flag to bypass interactive prompts.
+
+6.5 CUSTOM RPC ENDPOINTS
+-------------------------
+
+Pop CLI allows custom RPC endpoints for interacting with any Substrate chain.
+
+Interactive Selection:
+```bash
+pop call chain
+
+# When prompted for chain, select "Custom"
+# Enter custom URL: wss://my-custom-chain.io
+```
+
+Direct Specification:
+```bash
+pop call chain \
+  --pallet System \
+  --function Number \
+  --url wss://my-custom-chain.io
+```
+
+Works for:
+- `pop up` (deployment)
+- `pop call contract`
+- `pop call chain`
+
+6.6 PARAMETER FILES FOR BENCHMARKING
+-------------------------------------
+
+Save and reuse benchmarking configurations:
+
+Create Parameter File:
+```bash
+# Run benchmark interactively
+pop bench pallet
+
+# Save parameters to file when prompted
+# File: pop-bench.toml
+```
+
+Reuse Parameters:
+```bash
+pop bench pallet -f pop-bench.toml
+```
+
+Modify and Version Control:
+- Edit pop-bench.toml for different scenarios
+- Commit to git for reproducible benchmarks
+- Share across team members
+
+===========================================
+7. TROUBLESHOOTING
+===========================================
+
+7.1 COMMON ISSUES
+-----------------
+
+Issue: "Pallet not found" or "Function not found"
+Solution: Check case sensitivity. Use "Balances" not "balances", "transfer_keep_alive" not "transferKeepAlive"
+
+Issue: Local node port already in use (9944)
+Solution:
+```bash
+lsof -i :9944
+kill -9 <PID>
+```
+
+Issue: Contract deployment fails with "Module" error
+Solution: Ensure chain supports pallet-contracts. Use Pop Contracts template.
+
+Issue: Out of gas errors
+Solution: Always run --dry-run first to estimate gas. Increase account balance.
+
+Issue: Build errors with ink! v6
+Solution: Ensure using latest Pop CLI:
+```bash
+cargo install --force --locked pop-cli
+```
+
+Issue: E2E tests fail to start chain
+Solution: Ensure ink-node is installed:
+```bash
+pop install
+```
+
+Issue: Browser wallet doesn't prompt
+Solution:
+- Ensure extension is unlocked
+- Check browser console for errors
+- Try refreshing the page/terminal
+
+7.2 GETTING HELP
+----------------
+
+Community Support:
+- Polkadot Stack Exchange: https://polkadot.stackexchange.com/ (tag: 'pop')
+- Pop Telegram: https://t.me/onpopio
+- GitHub Issues: https://github.com/r0gue-io/pop-cli/issues
+
+Documentation:
+- Pop CLI Docs: https://learn.onpop.io
+- ink! Docs: https://use.ink
+- Polkadot Docs: https://docs.polkadot.com
+
+Debug Mode:
+```bash
+RUST_LOG=debug pop <command>
+```
+
+Version Info:
+```bash
+pop --version
+pop --help
+pop <command> --help
+```
+
+===========================================
+8. INTEGRATION WITH ink!
+===========================================
+
+8.1 HOW POP CLI ENHANCES ink! DEVELOPMENT
+------------------------------------------
+
+Pop CLI is the recommended tool for ink! smart contract development because:
+
+1. Simplified Build Process:
+   - No need to manually configure RISC-V targets
+   - Handles cargo-contract installation and updates
+   - Automatic metadata generation
+
+2. Integrated Testing:
+   - Run unit tests: `pop test`
+   - Run e2e tests: `pop test --e2e`
+   - Auto-manages test node lifecycle
+
+3. Streamlined Deployment:
+   - `pop up` handles dry-run, upload, and instantiation
+   - Multi-network support built-in
+   - Browser wallet integration for security
+
+4. Interactive Workflows:
+   - Guided contract calls
+   - Discover contract messages automatically
+   - Visual feedback during operations
+
+5. Template Library:
+   - Quick start with common patterns (ERC20, ERC721, etc.)
+   - Best practices built-in
+   - Consistent project structure
+
+8.2 POP CLI VS CARGO CONTRACT
+------------------------------
+
+Pop CLI wraps and extends cargo-contract:
+
+cargo-contract:
+- Lower-level tool
+- Direct control over build process
+- Manual metadata handling
+- CLI-only deployment
+
+Pop CLI:
+- Higher-level abstractions
+- Interactive workflows
+- Browser wallet support
+- Multi-network presets
+- Integrated with chain development
+
+When to use cargo-contract directly:
+- Need fine-grained build control
+- Custom build configurations
+- Integration with existing scripts that expect cargo-contract
+
+When to use Pop CLI:
+- Getting started with ink!
+- Interactive development workflow
+- Deploying to multiple networks
+- Teaching/learning ink!
+- Prefer guided workflows
+
+8.3 REFERENCING ink! FEATURES
+------------------------------
+
+For detailed ink! language features, see the companion documentation:
+
+- ink-llms.txt: Comprehensive ink! language guide
+  - Storage types and patterns
+  - Message and constructor definitions
+  - Events and errors
+  - Cross-contract calls
+  - Trait implementations
+  - Testing strategies
+
+- ink-technical-guide.txt: Deep technical reference
+  - Compilation architecture
+  - Dispatch mechanisms
+  - Storage layout details
+  - PolkaVM integration
+  - Advanced patterns
+
+- xcm-comprehensive-guide.txt: Cross-chain messaging
+  - XCM integration in contracts
+  - Cross-chain asset transfers
+  - Teleporting and reserving assets
+
+Example - Using ink! with Pop CLI:
+
+```rust
+// lib.rs - ink! v6 contract
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[ink::contract]
+mod my_contract {
+    use ink::storage::Mapping;
+
+    #[ink(storage)]
+    pub struct MyContract {
+        balances: Mapping<AccountId, Balance>,
+    }
+
+    impl MyContract {
+        #[ink(constructor)]
+        pub fn new(initial_supply: Balance) -> Self {
+            let mut balances = Mapping::default();
+            let caller = Self::env().caller();
+            balances.insert(caller, &initial_supply);
+            Self { balances }
+        }
+
+        #[ink(message)]
+        pub fn transfer(&mut self, to: AccountId, value: Balance) -> Result<(), Error> {
+            let from = self.env().caller();
+            let from_balance = self.balance_of(from);
+            if from_balance < value {
+                return Err(Error::InsufficientBalance);
+            }
+            // Transfer logic...
+            Ok(())
+        }
+
+        #[ink(message)]
+        pub fn balance_of(&self, account: AccountId) -> Balance {
+            self.balances.get(account).unwrap_or(0)
+        }
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    #[ink::scale_derive(Encode, Decode, TypeInfo)]
+    pub enum Error {
+        InsufficientBalance,
+    }
+}
+```
+
+Pop CLI workflow:
+```bash
+# Build (handles ink! v6 RISC-V compilation)
+pop build --release
+
+# Test (runs ink! unit tests)
+pop test
+
+# Deploy (manages pallet-contracts interaction)
+pop up --constructor new --args "1000000" --suri //Alice
+
+# Call (automatic ABI decoding)
+pop call contract \
+  -p . \
+  --contract <ADDR> \
+  --message balance_of \
+  --args 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
+  --suri //Alice
+```
+
+8.4 ink! VERSIONS AND COMPATIBILITY
+------------------------------------
+
+Pop CLI Version vs ink! Version:
+- Pop CLI 0.11+: ink! v6 (default)
+- Pop CLI 0.10.0: ink! v5
+
+Check your ink! version in Cargo.toml:
+```toml
+[dependencies]
+ink = { version = "6.0", default-features = false }
+```
+
+Migration from v5 to v6:
+- V6 uses RISC-V/PolkaVM instead of Wasm
+- V6 has simplified syntax for storage
+- V6 improves cross-contract calls
+- Pop CLI handles build differences automatically
+
+See ink! migration guide: https://use.ink/docs/v6/migration-guide
+
+===========================================
+9. BEST PRACTICES
+===========================================
+
+9.1 SMART CONTRACT DEVELOPMENT
+-------------------------------
+
+1. Always Start with Templates:
+   ```bash
+   pop new contract my_project --template <appropriate-template>
+   ```
+
+2. Test Before Deploy:
+   ```bash
+   pop test              # Unit tests
+   pop test --e2e        # E2E tests
+   ```
+
+3. Use Dry Runs:
+   ```bash
+   pop up --dry-run      # Estimate deployment gas
+   pop call contract --dry-run -x  # Estimate call gas
+   ```
+
+4. Never Expose Private Keys:
+   ```bash
+   # Bad: using --suri with real keys in production
+   # Good: using --use-wallet
+   pop up --use-wallet
+   ```
+
+5. Test on Testnet First:
+   ```bash
+   # Deploy to testnet
+   pop up --url wss://testnet-rpc.io --use-wallet
+
+   # Verify functionality
+
+   # Then deploy to mainnet
+   pop up --url wss://mainnet-rpc.io --use-wallet
+   ```
+
+6. Version Control Contract Addresses:
+   Create a `deployments.json`:
+   ```json
+   {
+     "local": "5CLPm1CeUvJhZ8GCDZCR7nWZ2m3XXe4X5MtAQK69zEjut36A",
+     "testnet": "5Dpq2...",
+     "mainnet": "5Eqr7..."
+   }
+   ```
+
+7. Document Constructor Arguments:
+   Create a README with deployment info:
+   ```markdown
+   ## Deployment
+
+   Constructor: new
+   Arguments:
+   - initial_supply: u128 (e.g., 1000000)
+   - name: String (e.g., "My Token")
+
+   Command:
+   pop up --constructor new --args 1000000 "My Token"
+   ```
+
+8. Use Events for Debugging:
+   ```rust
+   #[ink(event)]
+   pub struct Transfer {
+       from: Option<AccountId>,
+       to: Option<AccountId>,
+       value: Balance,
+   }
+
+   self.env().emit_event(Transfer { from: Some(from), to: Some(to), value });
+   ```
+
+9. Handle Errors Gracefully:
+   ```rust
+   #[derive(Debug, PartialEq, Eq)]
+   #[ink::scale_derive(Encode, Decode, TypeInfo)]
+   pub enum Error {
+       InsufficientBalance,
+       Unauthorized,
+   }
+
+   #[ink(message)]
+   pub fn transfer(&mut self, to: AccountId, value: Balance) -> Result<(), Error> {
+       // Validation logic
+   }
+   ```
+
+10. Optimize Storage Usage:
+    - Use `Mapping` for large datasets (not stored in metadata)
+    - Use `Lazy` for rarely accessed data
+    - Pack small values into tuples
+    - See ink-technical-guide.txt for storage patterns
+
+9.2 APPCHAIN DEVELOPMENT
+------------------------
+
+1. Choose the Right Template:
+   - Standard: Basic chain
+   - Assets: Need custom tokens
+   - Contracts: Need smart contract support
+
+2. Configure Genesis Properly:
+   - Set correct parachain ID
+   - Configure initial balances
+   - Set up initial validators
+
+3. Benchmark Before Production:
+   ```bash
+   pop bench pallet
+   ```
+   - Ensures accurate weight calculations
+   - Prevents fee estimation issues
+
+4. Test Runtime Upgrades:
+   ```bash
+   pop test runtime-upgrade
+   ```
+   - Verify upgrade logic
+   - Test migration code
+
+5. Security Considerations:
+   - Never commit private keys
+   - Use sudo pallet only in development
+   - Implement proper access controls
+   - Audit custom pallets
+
+6. Performance:
+   - Benchmark critical extrinsics
+   - Optimize storage layout
+   - Monitor block production times
+
+9.3 GENERAL WORKFLOW TIPS
+--------------------------
+
+1. Use Interactive Mode When Learning:
+   ```bash
+   pop call chain   # Learn available functions
+   pop call         # Explore contract messages
+   ```
+
+2. Use Non-Interactive Mode for Scripts:
+   ```bash
+   pop call chain --pallet Balances --function transfer_keep_alive --args $ADDR $AMT -y
+   ```
+
+3. Keep Pop CLI Updated:
+   ```bash
+   cargo install --force --locked pop-cli
+   ```
+
+4. Use Version Control:
+   - Commit contract code
+   - Commit chain runtime
+   - Commit deployment scripts
+   - .gitignore: target/, node_modules/, .env
+
+5. Document Your Commands:
+   Create scripts/deploy.sh:
+   ```bash
+   #!/bin/bash
+   pop up \
+     --url wss://rpc.network.io \
+     --constructor new \
+     --args "1000000" \
+     --use-wallet
+   ```
+
+6. Monitor Network Status:
+   ```bash
+   pop call chain --pallet System --function Number --url <RPC>
+   ```
+
+===========================================
+10. REFERENCE
+===========================================
+
+10.1 COMMAND QUICK REFERENCE
+-----------------------------
+
+Installation:
+- `pop install` - Set up development environment
+
+Project Creation:
+- `pop new contract` - Create ink! smart contract
+- `pop new chain` - Create Polkadot appchain
+
+Smart Contracts:
+- `pop build` - Build contract
+- `pop test` - Run unit tests
+- `pop test --e2e` - Run e2e tests
+- `pop up` - Deploy contract
+- `pop call` or `pop call contract` - Call contract
+
+Appchains:
+- `pop build` - Build chain
+- `pop up chain` - Launch chain
+- `pop call chain` - Interact with chain
+- `pop bench pallet` - Benchmark pallets
+
+Utilities:
+- `pop --version` - Show version
+- `pop --help` - Show help
+- `pop <command> --help` - Command-specific help
+
+10.2 COMMON FLAGS
+-----------------
+
+- `-p, --path <PATH>` - Project path
+- `--url <URL>` - RPC endpoint
+- `--suri <SURI>` - Secret key URI
+- `--use-wallet, -w` - Use browser wallet
+- `-x, --execute` - Execute transaction (for state changes)
+- `--dry-run` - Simulate without executing
+- `-y, --skip-confirm` - Skip confirmation prompts
+- `--sudo` - Wrap in sudo call
+- `--constructor <NAME>` - Constructor name
+- `--message <NAME>` - Message/function name
+- `--args <ARGS...>` - Arguments
+- `--contract <ADDR>` - Contract address
+- `--pallet <NAME>` - Pallet name
+- `--function <NAME>` - Function name
+- `--release` - Release build
+- `--e2e` - E2E tests
+- `-n, --no-build` - Skip build
+- `-f, --bench-file <FILE>` - Load benchmark config
+
+10.3 IMPORTANT ENDPOINTS
+------------------------
+
+Pop Network:
+- Testnet: wss://rpc.popnetwork.xyz
+
+Polkadot:
+- Polkadot: wss://rpc.polkadot.io
+- Kusama: wss://kusama-rpc.polkadot.io
+- Asset Hub (Polkadot): wss://polkadot-asset-hub-rpc.polkadot.io
+- Asset Hub (Kusama): wss://kusama-asset-hub-rpc.polkadot.io
+
+Testnets:
+- Paseo (Testnet): wss://paseo-rpc.dwellir.com
+- Westend: wss://westend-rpc.polkadot.io
+
+Local Development:
+- Default: ws://localhost:9944
+
+10.4 DEFAULT VALUES
+-------------------
+
+Contract Deployment (pop up):
+- Constructor: `new`
+- Suri: `//Alice`
+- URL: ws://localhost:9944 (auto-launches node)
+
+Contract Call (pop call):
+- URL: ws://localhost:9944
+- Suri: `//Alice`
+
+Benchmarking (pop bench):
+- Steps: 50
+- Repeats: 20
+- Map size: 1000000
+- DB cache: 1024 MB
+- Trie layers: 2
+- Output file: pop-bench.toml
+
+10.5 WELL-KNOWN ACCOUNTS (DEVELOPMENT)
+---------------------------------------
+
+Use for local testing only (never on mainnet):
+
+- `//Alice`: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+- `//Bob`: 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty
+- `//Charlie`: 5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y
+- `//Dave`: 5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy
+- `//Eve`: 5HGjWAeFDfFCWPsjFQdVV2Msvz2XtMktvgocEZcCj68kUMaw
+- `//Ferdie`: 5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL
+
+10.6 IMPORTANT LINKS
+--------------------
+
+Pop CLI:
+- GitHub: https://github.com/r0gue-io/pop-cli
+- Docs: https://learn.onpop.io
+- Telegram: https://t.me/onpopio
+
+ink! Smart Contracts:
+- Docs: https://use.ink
+- GitHub: https://github.com/use-ink/ink
+- Examples: https://github.com/use-ink/ink-examples
+
+Polkadot:
+- Main Docs: https://docs.polkadot.com
+- SDK Docs: https://paritytech.github.io/polkadot-sdk/master/
+- Wiki: https://wiki.polkadot.network
+
+Community:
+- Stack Exchange: https://polkadot.stackexchange.com
+- Discord: https://discord.gg/polkadot
+- Forum: https://forum.polkadot.network
+
+===========================================
+11. APPENDIX: EXAMPLES
+===========================================
+
+11.1 COMPLETE ERC20 TOKEN WORKFLOW
+-----------------------------------
+
+```bash
+# Create project
+pop new contract my_token --template erc20
+cd my_token
+
+# Build
+pop build --release
+
+# Test
+pop test
+
+# Deploy to local
+pop up --constructor new --args "1000000" "MyToken" "MTK" "18" --suri //Alice
+
+# Save address: 5CLPm1CeUvJhZ8GCDZCR7nWZ2m3XXe4X5MtAQK69zEjut36A
+
+# Check balance
+pop call contract \
+  -p . \
+  --contract 5CLPm1CeUvJhZ8GCDZCR7nWZ2m3XXe4X5MtAQK69zEjut36A \
+  --message balance_of \
+  --args 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
+  --suri //Alice
+
+# Transfer tokens
+pop call contract \
+  -p . \
+  --contract 5CLPm1CeUvJhZ8GCDZCR7nWZ2m3XXe4X5MtAQK69zEjut36A \
+  --message transfer \
+  --args 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty 1000 \
+  --suri //Alice \
+  -x
+
+# Deploy to testnet
+pop up \
+  -p . \
+  --url wss://rpc.popnetwork.xyz \
+  --constructor new \
+  --args "1000000" "MyToken" "MTK" "18" \
+  --use-wallet
+```
+
+11.2 CHAIN WITH CONTRACTS SUPPORT
+----------------------------------
+
+```bash
+# Create chain with contract support
+pop new chain
+# Select: Pop Contracts
+
+cd my_chain
+
+# Build chain
+pop build
+
+# Launch chain
+pop up chain
+
+# In new terminal - create contract
+cd ..
+pop new contract flipper
+cd flipper
+pop build
+
+# Deploy contract to custom chain
+pop up \
+  -p . \
+  --url ws://localhost:9944 \
+  --constructor new \
+  --args false \
+  --suri //Alice
+
+# Interact with contract on custom chain
+pop call contract \
+  -p . \
+  --contract <ADDRESS> \
+  --message flip \
+  --suri //Alice \
+  -x
+```
+
+11.3 MULTI-SIG DEPLOYMENT WORKFLOW
+-----------------------------------
+
+```bash
+# 1. Build contract
+pop build --release
+
+# 2. Estimate gas
+pop up --dry-run --constructor new --args "1000000" --suri //Alice
+
+# 3. Upload code only (doesn't instantiate)
+pop up --upload-only --use-wallet --url wss://mainnet-rpc.io
+
+# Code hash returned: 0xabc123...
+
+# 4. Instantiate via multisig (using chain call)
+pop call chain \
+  --pallet Contracts \
+  --function instantiate \
+  --args <code_hash> <gas> <storage> <constructor_data> \
+  --use-wallet \
+  --url wss://mainnet-rpc.io
+
+# Or use multisig pallet to coordinate
+```
+
+11.4 CI/CD DEPLOYMENT SCRIPT
+-----------------------------
+
+```bash
+#!/bin/bash
+# deploy.sh - Automated contract deployment
+
+set -e  # Exit on error
+
+# Configuration
+CONTRACT_PATH="./my_contract"
+RPC_URL="${RPC_URL:-wss://testnet-rpc.io}"
+CONSTRUCTOR="new"
+ARGS="1000000"
+
+echo "🚀 Starting deployment..."
+
+# Build
+echo "📦 Building contract..."
+cd "$CONTRACT_PATH"
+pop build --release
+
+# Dry run for gas estimation
+echo "⚙️ Estimating gas..."
+GAS_ESTIMATE=$(pop up \
+  --dry-run \
+  --constructor "$CONSTRUCTOR" \
+  --args "$ARGS" \
+  --suri "$DEPLOY_KEY" \
+  | grep "Gas limit" \
+  | cut -d' ' -f4-)
+
+echo "Gas estimate: $GAS_ESTIMATE"
+
+# Deploy
+echo "🌐 Deploying to $RPC_URL..."
+DEPLOYMENT_OUTPUT=$(pop up \
+  --url "$RPC_URL" \
+  --constructor "$CONSTRUCTOR" \
+  --args "$ARGS" \
+  --suri "$DEPLOY_KEY" \
+  -y)
+
+# Extract contract address
+CONTRACT_ADDRESS=$(echo "$DEPLOYMENT_OUTPUT" \
+  | grep "Contract Address" \
+  | cut -d'"' -f2)
+
+if [ -z "$CONTRACT_ADDRESS" ]; then
+  echo "❌ Deployment failed"
+  exit 1
+fi
+
+echo "✅ Deployed successfully!"
+echo "📍 Contract Address: $CONTRACT_ADDRESS"
+
+# Save to deployments file
+echo "{\"address\": \"$CONTRACT_ADDRESS\", \"network\": \"$RPC_URL\", \"date\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" \
+  > deployment.json
+
+# Initialize contract (if needed)
+echo "🔧 Initializing contract..."
+pop call contract \
+  -p . \
+  --contract "$CONTRACT_ADDRESS" \
+  --message initialize \
+  --suri "$DEPLOY_KEY" \
+  --url "$RPC_URL" \
+  -x -y
+
+echo "🎉 Deployment complete!"
+```
+
+Usage:
+```bash
+export DEPLOY_KEY="0x1234..."
+export RPC_URL="wss://testnet-rpc.io"
+./deploy.sh
+```
+
+===========================================
+END OF POP CLI COMPREHENSIVE GUIDE
+===========================================
+
+For more information:
+- Pop CLI Documentation: https://learn.onpop.io
+- Pop CLI GitHub: https://github.com/r0gue-io/pop-cli
+- ink! Documentation: https://use.ink
+- Polkadot Documentation: https://docs.polkadot.com
+
+Related Documentation in .claude/docs/:
+- ink-llms.txt - Comprehensive ink! language guide
+- ink-technical-guide.txt - Deep technical ink! reference
+- xcm-comprehensive-guide.txt - Cross-chain messaging guide
+
+Support:
+- Stack Exchange: https://polkadot.stackexchange.com (tag: pop)
+- Telegram: https://t.me/onpopio
+- GitHub Issues: https://github.com/r0gue-io/pop-cli/issues

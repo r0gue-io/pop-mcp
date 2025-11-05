@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "pop-cli": {
+      "command": "node",
+      "args": [
+        "/ABSOLUTE/PATH/TO/pop-mcp/build/index.js"
+      ]
+    }
+  }
+}

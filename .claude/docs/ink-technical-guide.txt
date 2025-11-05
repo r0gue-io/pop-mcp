@@ -1,0 +1,2374 @@
+===========================================
+INK! SMART CONTRACT TECHNICAL GUIDE
+Deep Technical Reference from Codebase Analysis
+===========================================
+
+This guide provides deep technical insights into ink! smart contract development,
+extracted from analyzing the ink! codebase itself. Use this alongside the main
+ink-llms.txt documentation for complete understanding.
+
+RELATED DOCUMENTATION:
+- pop-cli-comprehensive-guide.txt: Complete Pop CLI tooling guide (recommended for development workflow)
+- ink-llms.txt: Comprehensive ink! language guide
+- xcm-comprehensive-guide.txt: Cross-chain messaging integration
+
+TOOLING: For practical development workflow with ink!, use Pop CLI.
+See pop-cli-comprehensive-guide.txt for complete documentation.
+
+===========================================
+1. CORE ARCHITECTURE & COMPILATION
+===========================================
+
+1.1 ARCHITECTURE OVERVIEW
+--------------------------
+ink! v6 compiles contracts to RISC-V bytecode for PolkaVM execution.
+
+Key Crates:
+- ink_macro: Procedural macros (#[ink::contract], etc.)
+- ink_ir: Intermediate Representation - parses & analyzes contract code
+- ink_codegen: Generates Rust code from IR
+- ink_env: Environment & host functions interface
+- ink_storage: Storage collections (Mapping, Lazy, StorageVec)
+- ink_allocator: Bump allocator for dynamic memory
+- ink_primitives: Core types (Address, U256, H256, etc.)
+- ink_metadata: Contract metadata generation
+
+Compilation Flow:
+1. #[ink::contract] macro is invoked
+2. ink_macro forwards to ink_ir for parsing
+3. ink_ir creates Abstract Syntax Tree (AST)
+4. ink_codegen generates:
+   - Storage struct implementation
+   - Constructor/message dispatchers
+   - Environment access code
+   - Metadata generation code
+
+Build Command:
+```bash
+cargo +nightly build \
+  --no-default-features \
+  --target riscv64emac-unknown-none-polkavm.json \
+  -Zbuild-std="core,alloc"
+```
+
+Use cargo-contract instead:
+```bash
+cargo contract build  # Handles all complexity automatically
+```
+
+1.2 DISPATCH MECHANISM
+----------------------
+Every contract generates TWO key dispatch enums:
+
+Constructor Dispatcher:
+- Decodes first 4 bytes (selector) from input
+- Routes to appropriate constructor function
+- Returns new contract instance
+
+Message Dispatcher:
+- Decodes selector from call data
+- Routes to appropriate message function
+- Handles &self (immutable) vs &mut self (mutable) receivers
+
+Selector Calculation:
+- Default: BLAKE2-256 hash of "function_name" → first 4 bytes as u32
+- Can override with #[ink(selector = 0xDEADBEEF)]
+- Trait messages: combined hash of trait path + function name
+
+Example from codebase (dispatch.rs):
+```rust
+// Generated code creates dispatch enums
+enum ConstructorDecoder {
+    Constructor1(Args1),
+    Constructor2(Args2),
+}
+
+enum MessageDecoder {
+    Message1(Args1),
+    Message2(Args2),
+}
+```
+
+Wildcard Selector (IIP-2):
+- Use #[ink(selector = _)] for catch-all handler
+- Receives raw call data for custom routing
+- Only ONE wildcard per constructor/message type allowed
+
+1.3 STORAGE ARCHITECTURE
+------------------------
+Storage is key-based, not address-based like EVM.
+
+Two Storage Types:
+
+A) Packed Storage (single cell):
+- Stored as single SCALE-encoded blob
+- Examples: primitives, tuples, fixed arrays, Vec, String
+- Trait: implements `Packed` marker trait
+- Efficient for small data structures
+- Can be embedded in other types
+
+B) Non-Packed Storage (multiple cells):
+- Each field has unique storage key
+- Examples: Mapping, Lazy, StorageVec
+- Requires StorageKey generic parameter
+- Cannot nest in Vec or be map values
+
+Storage Key Calculation:
+```rust
+// AutoKey: automatic calculation during compile
+#[ink(storage)]
+pub struct MyContract {
+    value: u32,                      // Packed
+    balances: Mapping<Address, U256>, // Non-packed, auto key
+}
+
+// ManualKey: explicit key for upgradeable contracts
+#[ink(storage)]
+pub struct MyContract {
+    balances: Mapping<Address, U256, ManualKey<0x42>>,
+}
+```
+
+Storage Layout Example from flipper:
+```rust
+#[ink(storage)]
+pub struct Flipper {
+    value: bool,  // Stored at base storage key
+}
+
+// With Mapping:
+#[ink(storage)]
+pub struct Erc20 {
+    total_supply: U256,                    // Packed field at base key
+    balances: Mapping<Address, U256>,      // Each entry at derived key
+    allowances: Mapping<(Address, Address), U256>,  // Tuple keys work!
+}
+```
+
+Key Derivation for Mapping:
+```rust
+// Conceptual (actual impl in storage/mapping.rs)
+fn storage_key<K: Encode>(mapping_key: Key, entry_key: &K) -> Key {
+    // Combines mapping's base key + encoded entry key
+    derive_key(&(mapping_key, entry_key.encode()))
+}
+```
+
+===========================================
+2. COMPLETE CONTRACT ANATOMY
+===========================================
+
+2.1 MINIMAL CONTRACT STRUCTURE
+-------------------------------
+```rust
+#![cfg_attr(not(feature = "std"), no_std, no_main)]
+
+#[ink::contract]
+mod mycontract {
+    #[ink(storage)]
+    pub struct MyContract {
+        value: u32,
+    }
+
+    impl MyContract {
+        #[ink(constructor)]
+        pub fn new(init_value: u32) -> Self {
+            Self { value: init_value }
+        }
+
+        #[ink(message)]
+        pub fn get(&self) -> u32 {
+            self.value
+        }
+
+        #[ink(message)]
+        pub fn set(&mut self, new_value: u32) {
+            self.value = new_value;
+        }
+    }
+}
+```
+
+RULES:
+- Exactly ONE #[ink(storage)] struct required
+- At least ONE #[ink(constructor)] required
+- At least ONE #[ink(message)] required
+- Can have multiple constructors and messages
+- Module name becomes contract identifier
+
+2.2 ENVIRONMENT ACCESS
+----------------------
+Every contract gets `Self::env()` (constructors) or `self.env()` (messages):
+
+```rust
+impl MyContract {
+    #[ink(constructor)]
+    pub fn new() -> Self {
+        let caller = Self::env().caller();  // Who called constructor
+        let value = Self::env().transferred_value();  // Value sent
+        Self { owner: caller }
+    }
+
+    #[ink(message)]
+    pub fn do_something(&mut self) {
+        let caller = self.env().caller();        // Current message caller
+        let contract = self.env().account_id();  // This contract's address
+        let balance = self.env().balance();      // This contract's balance
+        let block = self.env().block_number();   // Current block number
+        let timestamp = self.env().block_timestamp(); // Current timestamp
+    }
+}
+```
+
+Available Environment Functions (from env/api.rs):
+- caller() -> Address  // Immediate caller
+- account_id() -> Address  // This contract's address
+- balance() -> U256  // Contract balance (returns U256, not u128!)
+- transferred_value() -> U256  // Value sent with call (returns U256, not u128!)
+- block_number() -> BlockNumber
+- block_timestamp() -> Timestamp
+- gas_left() -> Gas  // Remaining gas
+- terminate(beneficiary: Address)  // Self-destruct
+- transfer(dest: Address, value: U256) -> Result<()>
+- hash_bytes<H: HashOutput>(input: &[u8]) -> H  // Cryptographic hash
+
+IMPORTANT TYPE NOTE:
+In ink! v6, balance() and transferred_value() return U256, but native chain assets (DOT, KSM, etc.) are u128!
+
+**BEST PRACTICE for Polkadot/Substrate contracts:**
+1. Define a type alias for your native asset: `pub type DotBalance = u128;`
+2. Convert U256 from env functions to u128 for your contract logic
+3. Convert u128 back to U256 for balance comparisons
+
+```rust
+// Define type alias for native asset
+pub type DotBalance = u128;
+
+#[ink(message)]
+pub fn deposit(&mut self) -> Result<()> {
+    // Convert U256 to u128 for native asset
+    let amount: DotBalance = self.env().transferred_value()
+        .try_into()
+        .map_err(|_| Error::BalanceConversionFailed)?;
+
+    self.balance += amount;
+    Ok(())
+}
+
+#[ink(message)]
+pub fn transfer(&mut self, amount: DotBalance) -> Result<()> {
+    // Convert u128 to U256 for comparison
+    let amount_u256: U256 = amount.into();
+    if self.env().balance() < amount_u256 {
+        return Err(Error::InsufficientBalance);
+    }
+    // ... rest of logic
+}
+
+// Use DotBalance in events
+#[ink(event)]
+pub struct Transfer {
+    amount: DotBalance,  // u128 for native asset
+}
+```
+
+**Address Types - CRITICAL for XCM:**
+- ink! v6 uses `Address` (20-byte H160) for EVM compatibility
+- Polkadot uses 32-byte addresses (AccountId32)
+- For callers: `Address` works (addresses are mapped by pallet-revive)
+- For XCM destinations: MUST use `[u8; 32]` (32-byte Polkadot address)
+
+```rust
+#[ink(message)]
+pub fn teleport(&mut self, to: [u8; 32], amount: DotBalance) -> Result<()> {
+    // Build XCM with 32-byte address
+    let beneficiary = AccountId32 {
+        network: None,
+        id: to,  // 32-byte address for XCM
+    };
+}
+```
+
+2.3 TYPES & IMPORTS
+-------------------
+Common ink! types (from ink_primitives):
+
+```rust
+use ink::{
+    Address,      // 20-byte Ethereum-style address
+    U256,         // 256-bit unsigned integer (Ethereum compatible)
+    H256,         // 32-byte hash
+    H160,         // 20-byte hash
+    storage::{
+        Mapping,      // Key-value storage
+        Lazy,         // Lazily loaded single value
+        StorageVec,   // Dynamic array in storage
+    },
+};
+
+// Address is the unified type for accounts in ink! v6 (20-byte H160)
+let account: Address = self.env().caller();
+
+// IMPORTANT: Native Polkadot assets are u128, not U256!
+// Define a type alias for clarity
+pub type DotBalance = u128;
+
+// env functions return U256, convert to u128 for native assets
+let balance_u256: U256 = self.env().balance();
+let balance: DotBalance = balance_u256.try_into().unwrap_or(0);
+
+// For XCM: Polkadot addresses are 32 bytes, not 20!
+// ink! uses Address (H160, 20-byte) but XCM needs AccountId32 (32-byte)
+// Use env().to_account_id() to convert Address → AccountId
+let address: Address = self.env().caller();
+let account_id = self.env().to_account_id(address); // Returns AccountId
+let bytes: [u8; 32] = account_id.0; // Extract inner bytes
+
+// Other primitive types
+let count: u32 = 42;
+let flag: bool = true;
+let data: [u8; 32] = [0; 32];
+```
+
+Standard Library Types (no_std compatible):
+```rust
+use ink::prelude::{
+    vec::Vec,
+    string::String,
+    collections::BTreeMap,  // Use BTreeMap, NOT HashMap in no_std
+};
+```
+
+===========================================
+3. STORAGE COLLECTIONS IN DEPTH
+===========================================
+
+3.1 MAPPING - KEY-VALUE STORE
+------------------------------
+Most common storage type. Lazy - only loads what's accessed.
+
+Basic Usage:
+```rust
+use ink::storage::Mapping;
+
+#[ink(storage)]
+pub struct MyContract {
+    balances: Mapping<Address, U256>,
+}
+
+impl MyContract {
+    #[ink(constructor)]
+    pub fn new() -> Self {
+        Self {
+            balances: Mapping::default(),
+        }
+    }
+
+    #[ink(message)]
+    pub fn set_balance(&mut self, account: Address, amount: U256) {
+        // Insert or update
+        self.balances.insert(account, &amount);
+    }
+
+    #[ink(message)]
+    pub fn get_balance(&self, account: Address) -> U256 {
+        // Returns Option<V>, unwrap_or_default() gives 0 if not found
+        self.balances.get(account).unwrap_or_default()
+    }
+
+    #[ink(message)]
+    pub fn remove_balance(&mut self, account: Address) {
+        self.balances.remove(account);
+    }
+
+    #[ink(message)]
+    pub fn balance_exists(&self, account: Address) -> bool {
+        self.balances.contains(account)
+    }
+}
+```
+
+Complex Keys (tuples, structs):
+```rust
+#[ink(storage)]
+pub struct Erc20 {
+    // Tuple key for allowances mapping
+    allowances: Mapping<(Address, Address), U256>,
+}
+
+impl Erc20 {
+    #[ink(message)]
+    pub fn allowance(&self, owner: Address, spender: Address) -> U256 {
+        // Tuple key: (owner, spender)
+        self.allowances.get((owner, spender)).unwrap_or_default()
+    }
+
+    #[ink(message)]
+    pub fn approve(&mut self, spender: Address, amount: U256) {
+        let owner = self.env().caller();
+        self.allowances.insert((owner, spender), &amount);
+    }
+}
+```
+
+Manual Storage Keys (for upgradeability):
+```rust
+use ink::storage::traits::ManualKey;
+
+#[ink(storage)]
+pub struct MyContract {
+    // Explicit key 123 - won't change if struct is reordered
+    balances: Mapping<Address, U256, ManualKey<123>>,
+    // Different manual keys for each mapping
+    approvals: Mapping<Address, U256, ManualKey<456>>,
+}
+```
+
+3.2 LAZY - SINGLE VALUE
+-----------------------
+Lazy-loaded single value. Use when value is large or rarely accessed.
+
+```rust
+use ink::storage::Lazy;
+
+#[ink(storage)]
+pub struct MyContract {
+    owner: Address,              // Always loaded (packed)
+    config: Lazy<Config>,        // Only loaded when accessed
+}
+
+#[derive(scale::Encode, scale::Decode)]
+#[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+pub struct Config {
+    // Large struct that we don't want always in memory
+    params: Vec<u8>,
+    metadata: String,
+}
+
+impl MyContract {
+    #[ink(constructor)]
+    pub fn new(owner: Address) -> Self {
+        Self {
+            owner,
+            config: Lazy::default(),
+        }
+    }
+
+    #[ink(message)]
+    pub fn set_config(&mut self, new_config: Config) {
+        self.config.set(&new_config);
+    }
+
+    #[ink(message)]
+    pub fn get_config(&self) -> Option<Config> {
+        self.config.get()
+    }
+}
+```
+
+3.3 STORAGEVEC - DYNAMIC ARRAY
+-------------------------------
+```rust
+use ink::storage::StorageVec;
+
+#[ink(storage)]
+pub struct MyContract {
+    items: StorageVec<Address>,
+}
+
+impl MyContract {
+    #[ink(constructor)]
+    pub fn new() -> Self {
+        Self {
+            items: StorageVec::new(),
+        }
+    }
+
+    #[ink(message)]
+    pub fn add_item(&mut self, item: Address) {
+        self.items.push(&item);
+    }
+
+    #[ink(message)]
+    pub fn get_item(&self, index: u32) -> Option<Address> {
+        self.items.get(index)
+    }
+
+    #[ink(message)]
+    pub fn len(&self) -> u32 {
+        self.items.len()
+    }
+
+    #[ink(message)]
+    pub fn pop(&mut self) -> Option<Address> {
+        self.items.pop()
+    }
+}
+```
+
+IMPORTANT: StorageVec elements must be Packed types!
+
+===========================================
+4. EVENTS - COMPLETE GUIDE
+===========================================
+
+4.1 BASIC EVENTS
+----------------
+Events are emitted to notify off-chain listeners.
+
+```rust
+#[ink(event)]
+pub struct Transfer {
+    #[ink(topic)]  // Indexed - can filter by this
+    from: Option<Address>,
+    #[ink(topic)]
+    to: Option<Address>,
+    value: U256,  // Not indexed - only in data
+}
+
+impl MyContract {
+    #[ink(message)]
+    pub fn transfer(&mut self, to: Address, value: U256) {
+        let from = self.env().caller();
+
+        // ... transfer logic ...
+
+        // Emit event
+        self.env().emit_event(Transfer {
+            from: Some(from),
+            to: Some(to),
+            value,
+        });
+    }
+}
+```
+
+Topics (indexed fields):
+- Max 4 topics per event (including signature topic)
+- Topics allow efficient filtering in queries
+- Use for fields you'll search by (addresses, IDs)
+- Non-topic fields are in event data blob
+
+4.2 ANONYMOUS EVENTS
+--------------------
+No signature topic - more topics available for indexing.
+
+```rust
+#[ink(event)]
+#[ink(anonymous)]  // No signature topic generated
+pub struct MyAnonymousEvent {
+    #[ink(topic)]
+    field1: u32,
+    #[ink(topic)]
+    field2: Address,
+    #[ink(topic)]
+    field3: U256,
+    #[ink(topic)]
+    field4: [u8; 32],  // Can have 4 topics since no signature
+}
+```
+
+4.3 CUSTOM SIGNATURE
+--------------------
+```rust
+#[ink(event)]
+#[ink(signature_topic = "1111111111111111111111111111111111111111111111111111111111111111")]
+pub struct MyCustomEvent {
+    value: u32,
+}
+// This event will have the specified 32-byte hex string as its signature
+```
+
+4.4 EVENTS FROM OTHER CRATES
+-----------------------------
+Can emit events defined elsewhere:
+
+```rust
+// In external crate:
+#[ink::event]
+pub struct ExternalEvent {
+    #[ink(topic)]
+    pub data: u32,
+}
+
+// In your contract:
+#[ink::contract]
+mod mycontract {
+    use external_crate::ExternalEvent;
+
+    // ... storage, etc ...
+
+    #[ink(message)]
+    pub fn do_something(&self) {
+        self.env().emit_event(ExternalEvent { data: 42 });
+    }
+}
+```
+
+===========================================
+5. CONSTRUCTORS & MESSAGES
+===========================================
+
+5.1 MULTIPLE CONSTRUCTORS
+--------------------------
+```rust
+impl MyContract {
+    // Default constructor
+    #[ink(constructor)]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    // Constructor with initial value
+    #[ink(constructor)]
+    pub fn new_with_value(init_value: u32) -> Self {
+        Self { value: init_value }
+    }
+
+    // Constructor with custom selector
+    #[ink(constructor)]
+    #[ink(selector = 0xDEADBEEF)]
+    pub fn custom_new() -> Self {
+        Self { value: 42 }
+    }
+}
+
+// Constructors are ALWAYS payable - can receive value
+// Access via Self::env().transferred_value()
+```
+
+5.2 MESSAGE TYPES
+-----------------
+```rust
+impl MyContract {
+    // Read-only message (&self)
+    #[ink(message)]
+    pub fn get_value(&self) -> u32 {
+        self.value
+    }
+
+    // Mutating message (&mut self)
+    #[ink(message)]
+    pub fn set_value(&mut self, new_value: u32) {
+        self.value = new_value;
+    }
+
+    // Payable message - can receive native tokens
+    #[ink(message)]
+    #[ink(payable)]
+    pub fn fund(&mut self) {
+        let amount = self.env().transferred_value();
+        // ... handle funds ...
+    }
+
+    // Custom selector
+    #[ink(message, selector = 0xCAFEBABE)]
+    pub fn special_function(&self) -> bool {
+        true
+    }
+
+    // Wildcard selector - catches unmatched selectors
+    #[ink(message, selector = _)]
+    pub fn fallback(&self) {
+        // Handle unknown selectors
+    }
+}
+```
+
+5.3 RETURN TYPES & ERRORS
+-------------------------
+```rust
+// Custom error type
+#[derive(Debug, PartialEq, Eq)]
+#[ink::error]
+pub enum Error {
+    InsufficientBalance,
+    Unauthorized,
+    InvalidInput,
+}
+
+// Result type alias
+pub type Result<T> = core::result::Result<T, Error>;
+
+impl MyContract {
+    // Return Result for fallible operations
+    #[ink(message)]
+    pub fn transfer(&mut self, to: Address, amount: U256) -> Result<()> {
+        if amount > self.balance {
+            return Err(Error::InsufficientBalance);
+        }
+        // ... do transfer ...
+        Ok(())
+    }
+
+    // Can return complex types
+    #[ink(message)]
+    pub fn get_info(&self) -> (Address, U256, bool) {
+        (self.owner, self.balance, self.active)
+    }
+
+    // Can return Vec, String, etc.
+    #[ink(message)]
+    pub fn get_list(&self) -> Vec<Address> {
+        // Build and return vec
+        vec![self.owner, self.other]
+    }
+}
+```
+
+===========================================
+6. CROSS-CONTRACT CALLS
+===========================================
+
+6.1 CALLING OTHER CONTRACTS
+----------------------------
+Method 1: Using Contract Reference (type-safe)
+
+```rust
+// First, define or import the trait/interface
+#[ink::contract_ref]
+pub trait OtherContract {
+    #[ink(message)]
+    fn get_value(&self) -> u32;
+
+    #[ink(message)]
+    fn set_value(&mut self, new_value: u32);
+}
+
+#[ink::contract]
+mod caller_contract {
+    use super::OtherContractRef;  // Generated by contract_ref macro
+
+    #[ink(storage)]
+    pub struct CallerContract {
+        other_contract_address: Address,
+    }
+
+    impl CallerContract {
+        #[ink(constructor)]
+        pub fn new(other_address: Address) -> Self {
+            Self {
+                other_contract_address: other_address,
+            }
+        }
+
+        #[ink(message)]
+        pub fn call_other(&mut self) -> u32 {
+            // Create reference to other contract
+            let other = OtherContractRef::from(self.other_contract_address);
+
+            // Call method - returns value directly
+            let value = other.get_value();
+
+            // Can chain calls
+            other.set_value(value + 1);
+
+            value
+        }
+    }
+}
+```
+
+6.2 INSTANTIATING CONTRACTS
+----------------------------
+```rust
+#[ink(message)]
+pub fn instantiate_other(&mut self, code_hash: H256, init_value: u32) -> Address {
+    let other = OtherContractRef::new(init_value)
+        .code_hash(code_hash)          // Code to instantiate
+        .endowment(U256::from(1000))   // Initial balance
+        .salt_bytes(Some([0x42; 32]))  // Salt for address derivation
+        .instantiate();                // Deploy!
+
+    // Returns instance reference, get address with:
+    other.to_addr()
+}
+```
+
+6.3 ADVANCED CALL OPTIONS
+--------------------------
+```rust
+#[ink(message)]
+pub fn advanced_call(&mut self) {
+    let other = OtherContractRef::from(self.other_address);
+
+    // Get call builder for fine control
+    let mut call_builder = other.call_mut();
+
+    // Call with custom gas and value
+    call_builder
+        .set_value(42)
+        .ref_time_limit(5_000_000)      // Gas limit
+        .proof_size_limit(100_000)      // Proof size limit
+        .storage_deposit_limit(U256::from(1_000_000))
+        .invoke();
+}
+```
+
+6.4 DELEGATE CALLS
+------------------
+Execute code in context of calling contract:
+
+```rust
+use ink::env::call::{
+    build_call,
+    Call,
+    ExecutionInput,
+    Selector,
+};
+
+#[ink(message)]
+pub fn delegate_call(&mut self, code_hash: H256) -> Result<()> {
+    let selector = Selector::new([0xDE, 0xAD, 0xBE, 0xEF]);
+
+    build_call::<DefaultEnvironment>()
+        .delegate(code_hash)
+        .exec_input(ExecutionInput::new(selector))
+        .returns::<()>()
+        .invoke()
+        .map_err(|_| Error::DelegateCallFailed)
+}
+```
+
+===========================================
+7. TRAIT DEFINITIONS & IMPLEMENTATIONS
+===========================================
+
+7.1 DEFINING TRAITS
+-------------------
+```rust
+// Define trait in separate module or crate
+#[ink::trait_definition]
+pub trait Psp22 {
+    #[ink(message)]
+    fn total_supply(&self) -> U256;
+
+    #[ink(message)]
+    fn balance_of(&self, owner: Address) -> U256;
+
+    #[ink(message)]
+    fn transfer(&mut self, to: Address, value: U256) -> Result<()>;
+}
+```
+
+7.2 IMPLEMENTING TRAITS
+------------------------
+```rust
+#[ink::contract]
+mod my_token {
+    use super::Psp22;
+    use ink::{U256, storage::Mapping};
+
+    #[ink(storage)]
+    pub struct MyToken {
+        total_supply: U256,
+        balances: Mapping<Address, U256>,
+    }
+
+    impl MyToken {
+        #[ink(constructor)]
+        pub fn new(initial_supply: U256) -> Self {
+            let mut balances = Mapping::default();
+            let caller = Self::env().caller();
+            balances.insert(caller, &initial_supply);
+
+            Self {
+                total_supply: initial_supply,
+                balances,
+            }
+        }
+    }
+
+    // Implement the trait
+    impl Psp22 for MyToken {
+        #[ink(message)]
+        fn total_supply(&self) -> U256 {
+            self.total_supply
+        }
+
+        #[ink(message)]
+        fn balance_of(&self, owner: Address) -> U256 {
+            self.balances.get(owner).unwrap_or_default()
+        }
+
+        #[ink(message)]
+        fn transfer(&mut self, to: Address, value: U256) -> Result<()> {
+            let from = self.env().caller();
+            let from_balance = self.balance_of(from);
+
+            if from_balance < value {
+                return Err(Error::InsufficientBalance);
+            }
+
+            self.balances.insert(from, &(from_balance - value));
+            let to_balance = self.balance_of(to);
+            self.balances.insert(to, &(to_balance + value));
+
+            Ok(())
+        }
+    }
+}
+```
+
+7.3 TRAIT NAMESPACES
+--------------------
+Prevent selector collisions:
+
+```rust
+#[ink::trait_definition(namespace = "psp22")]
+pub trait Psp22 {
+    #[ink(message)]
+    fn transfer(&mut self, to: Address, value: U256) -> Result<()>;
+}
+
+#[ink::trait_definition(namespace = "psp34")]
+pub trait Psp34 {
+    #[ink(message)]
+    fn transfer(&mut self, to: Address, id: u32) -> Result<()>;
+}
+// Different namespaces = different selectors, no collision!
+```
+
+===========================================
+8. TESTING STRATEGIES
+===========================================
+
+8.1 UNIT TESTS (OFF-CHAIN)
+---------------------------
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[ink::test]
+    fn test_constructor() {
+        let contract = MyContract::new(42);
+        assert_eq!(contract.get_value(), 42);
+    }
+
+    #[ink::test]
+    fn test_transfer() {
+        let mut contract = MyContract::new(100);
+
+        // Mock environment
+        let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+        ink::env::test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
+
+        // Test logic
+        assert!(contract.transfer(accounts.bob, 50).is_ok());
+        assert_eq!(contract.balance_of(accounts.bob), 50);
+    }
+
+    #[ink::test]
+    fn test_events() {
+        let mut contract = MyContract::new(0);
+        contract.do_something();
+
+        // Check emitted events
+        let emitted_events = ink::env::test::recorded_events().collect::<Vec<_>>();
+        assert_eq!(emitted_events.len(), 1);
+    }
+}
+```
+
+8.2 E2E TESTS (ON-CHAIN)
+------------------------
+```rust
+#[cfg(all(test, feature = "e2e-tests"))]
+mod e2e_tests {
+    use super::*;
+    use ink_e2e::ContractsBackend;
+
+    type E2EResult<T> = Result<T, Box<dyn std::error::Error>>;
+
+    #[ink_e2e::test]
+    async fn e2e_transfer<Client: E2EBackend>(
+        mut client: Client
+    ) -> E2EResult<()> {
+        // Deploy contract
+        let mut constructor = MyContractRef::new(100);
+        let contract = client
+            .instantiate("my_contract", &ink_e2e::alice(), &mut constructor)
+            .submit()
+            .await?;
+
+        // Build call
+        let mut call_builder = contract.call_builder::<MyContract>();
+
+        // Execute message
+        let transfer = call_builder.transfer(ink_e2e::bob().public_key().0.into(), 50);
+        let call_result = client
+            .call(&ink_e2e::alice(), &transfer)
+            .submit()
+            .await?;
+
+        assert!(call_result.return_value().is_ok());
+
+        // Check balance
+        let balance_call = call_builder.balance_of(ink_e2e::bob().public_key().0.into());
+        let balance = client
+            .call(&ink_e2e::alice(), &balance_call)
+            .dry_run()
+            .await?
+            .return_value();
+
+        assert_eq!(balance, 50);
+
+        Ok(())
+    }
+}
+```
+
+===========================================
+9. ADVANCED PATTERNS
+===========================================
+
+9.1 OWNABLE PATTERN
+-------------------
+```rust
+#[ink::contract]
+mod ownable_contract {
+    #[ink(storage)]
+    pub struct OwnableContract {
+        owner: Address,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    #[ink::error]
+    pub enum Error {
+        NotOwner,
+    }
+
+    impl OwnableContract {
+        #[ink(constructor)]
+        pub fn new() -> Self {
+            Self {
+                owner: Self::env().caller(),
+            }
+        }
+
+        // Modifier-like pattern
+        fn only_owner(&self) -> Result<(), Error> {
+            if self.env().caller() != self.owner {
+                return Err(Error::NotOwner);
+            }
+            Ok(())
+        }
+
+        #[ink(message)]
+        pub fn protected_function(&mut self) -> Result<()> {
+            self.only_owner()?;
+            // ... protected logic ...
+            Ok(())
+        }
+
+        #[ink(message)]
+        pub fn transfer_ownership(&mut self, new_owner: Address) -> Result<()> {
+            self.only_owner()?;
+            self.owner = new_owner;
+            Ok(())
+        }
+    }
+}
+```
+
+9.2 PAUSABLE PATTERN
+--------------------
+```rust
+#[ink::contract]
+mod pausable_contract {
+    #[ink(storage)]
+    pub struct PausableContract {
+        owner: Address,
+        paused: bool,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    #[ink::error]
+    pub enum Error {
+        ContractPaused,
+        NotOwner,
+    }
+
+    impl PausableContract {
+        fn ensure_not_paused(&self) -> Result<(), Error> {
+            if self.paused {
+                return Err(Error::ContractPaused);
+            }
+            Ok(())
+        }
+
+        #[ink(message)]
+        pub fn pause(&mut self) -> Result<()> {
+            if self.env().caller() != self.owner {
+                return Err(Error::NotOwner);
+            }
+            self.paused = true;
+            Ok(())
+        }
+
+        #[ink(message)]
+        pub fn unpause(&mut self) -> Result<()> {
+            if self.env().caller() != self.owner {
+                return Err(Error::NotOwner);
+            }
+            self.paused = false;
+            Ok(())
+        }
+
+        #[ink(message)]
+        pub fn do_something(&mut self) -> Result<()> {
+            self.ensure_not_paused()?;
+            // ... logic ...
+            Ok(())
+        }
+    }
+}
+```
+
+9.3 REENTRANCY GUARD
+--------------------
+```rust
+#[ink::contract]
+mod guarded_contract {
+    #[ink(storage)]
+    pub struct GuardedContract {
+        locked: bool,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    #[ink::error]
+    pub enum Error {
+        ReentrantCall,
+    }
+
+    impl GuardedContract {
+        #[ink(constructor)]
+        pub fn new() -> Self {
+            Self { locked: false }
+        }
+
+        #[ink(message)]
+        pub fn protected_call(&mut self) -> Result<()> {
+            if self.locked {
+                return Err(Error::ReentrantCall);
+            }
+
+            self.locked = true;
+
+            // ... make external calls ...
+            // If this calls back into this contract, locked=true will catch it
+
+            self.locked = false;
+            Ok(())
+        }
+    }
+}
+```
+
+9.4 ACCESS CONTROL (RBAC)
+-------------------------
+```rust
+use ink::prelude::{vec::Vec, collections::BTreeMap};
+
+#[ink::contract]
+mod access_control {
+    use ink::storage::Mapping;
+
+    #[ink(storage)]
+    pub struct AccessControl {
+        // role => account => has_role
+        roles: Mapping<u32, Mapping<Address, bool>>,
+        admin: Address,
+    }
+
+    const MINTER_ROLE: u32 = 1;
+    const BURNER_ROLE: u32 = 2;
+
+    #[derive(Debug, PartialEq, Eq)]
+    #[ink::error]
+    pub enum Error {
+        MissingRole,
+        NotAdmin,
+    }
+
+    impl AccessControl {
+        #[ink(constructor)]
+        pub fn new() -> Self {
+            Self {
+                roles: Mapping::default(),
+                admin: Self::env().caller(),
+            }
+        }
+
+        #[ink(message)]
+        pub fn grant_role(&mut self, role: u32, account: Address) -> Result<()> {
+            if self.env().caller() != self.admin {
+                return Err(Error::NotAdmin);
+            }
+
+            // Get or create role mapping
+            let mut role_members = self.roles.get(role).unwrap_or_default();
+            role_members.insert(account, &true);
+            self.roles.insert(role, &role_members);
+
+            Ok(())
+        }
+
+        #[ink(message)]
+        pub fn has_role(&self, role: u32, account: Address) -> bool {
+            self.roles.get(role)
+                .and_then(|m| m.get(account))
+                .unwrap_or(false)
+        }
+
+        #[ink(message)]
+        pub fn mint(&mut self) -> Result<()> {
+            if !self.has_role(MINTER_ROLE, self.env().caller()) {
+                return Err(Error::MissingRole);
+            }
+            // ... minting logic ...
+            Ok(())
+        }
+    }
+}
+```
+
+===========================================
+10. XCM INTEGRATION
+===========================================
+
+10.1 XCM BASICS
+---------------
+Cross-Consensus Messaging for interacting with relay chain & other parachains.
+
+IMPORTANT: To use XCM features in ink! contracts, you must enable the `xcm` feature flag.
+
+In your Cargo.toml:
+```toml
+[dependencies]
+ink = { version = "6", default-features = false, features = ["xcm"] }
+
+[features]
+default = ["std"]
+std = [
+    "ink/std",
+]
+```
+
+Example contract using XCM:
+```rust
+#[ink::contract]
+mod xcm_contract {
+    use ink::xcm::prelude::*;
+
+    #[ink(storage)]
+    pub struct XcmContract;
+
+    #[derive(Debug, PartialEq, Eq)]
+    #[ink::error]
+    pub enum Error {
+        XcmExecuteFailed,
+        XcmSendFailed,
+    }
+
+    impl XcmContract {
+        #[ink(constructor, payable)]
+        pub fn new() -> Self {
+            Self
+        }
+
+        #[ink(message)]
+        pub fn transfer_to_relay(
+            &mut self,
+            receiver: Address,
+            value: U256,
+        ) -> Result<(), Error> {
+            // Build XCM message
+            let asset: Asset = (Parent, value).into();
+            let beneficiary = AccountId32 {
+                network: None,
+                id: *receiver.as_ref(),
+            };
+
+            let message: Xcm<()> = Xcm::builder()
+                .withdraw_asset(asset.clone())
+                .buy_execution(asset.clone(), Unlimited)
+                .deposit_asset(asset, beneficiary)
+                .build();
+
+            // Execute XCM
+            let weight = self.env()
+                .xcm_weigh(&VersionedXcm::V5(message.clone()))
+                .expect("weighing should work");
+
+            self.env()
+                .xcm_execute(&VersionedXcm::V5(message), weight)
+                .map_err(|_| Error::XcmExecuteFailed)
+        }
+
+        #[ink(message)]
+        pub fn send_xcm_to_parachain(
+            &mut self,
+            para_id: u32,
+            value: U256,
+        ) -> Result<(), Error> {
+            let destination = Location::new(
+                1,
+                [Parachain(para_id)]
+            );
+
+            let asset: Asset = (Here, value).into();
+
+            let message: Xcm<()> = Xcm::builder()
+                .withdraw_asset(asset.clone())
+                .buy_execution((Here, value / 10), Unlimited)
+                .deposit_asset(asset, destination.clone())
+                .build();
+
+            self.env()
+                .xcm_send(
+                    &VersionedLocation::V5(destination),
+                    &VersionedXcm::V5(message),
+                )
+                .map_err(|_| Error::XcmSendFailed)
+        }
+    }
+}
+```
+
+10.2 TELEPORT ASSETS (TRUSTED CHAINS)
+--------------------------------------
+Teleports are for trusted chains (e.g., between system parachains like Asset Hub → People Chain).
+
+**To INITIATE a Teleport from your chain:**
+Use `xcm_execute` locally with:
+1. WithdrawAsset - Withdraw from contract's holding
+2. InitiateTeleport - Send to destination with nested XCM for execution there:
+   - BuyExecution - Pay for execution on destination
+   - DepositAsset - Deposit to beneficiary
+
+```rust
+use ink::xcm::prelude::*;
+
+pub type DotBalance = u128;
+
+#[ink(message)]
+pub fn teleport_to_people_chain(
+    &mut self,
+    to: Address, // User's Address (automatically converted to 32-byte AccountId)
+    amount: DotBalance,
+) -> Result<()> {
+    // Check balance
+    let contract_balance = self.env().balance();
+    if contract_balance < amount.into() {
+        return Err(Error::InsufficientBalance);
+    }
+
+    // Convert Address to AccountId (32-byte)
+    let account_id = self.env().to_account_id(to);
+
+    // Destination: People Chain (para 1004)
+    let destination = Location::new(
+        1,                    // Parent (relay chain)
+        [Parachain(1004)]     // People Chain
+    );
+
+    // Beneficiary on People Chain
+    let beneficiary = ink::xcm::prelude::AccountId32 {
+        network: None,
+        id: account_id.0, // Extract [u8; 32] from AccountId
+    };
+
+    // Asset to teleport (Parent = relay chain's native asset)
+    let asset: Asset = (Parent, amount).into();
+
+    // Build XCM message with correct instruction order
+    let message: Xcm<()> = Xcm::builder()
+        .receive_teleported_asset(asset.clone())  // 1. Receive teleported asset
+        .clear_origin()                           // 2. Clear origin for security
+        .buy_execution((Parent, amount / 10), Unlimited)  // 3. Pay for execution
+        .deposit_asset(All, beneficiary)          // 4. Deposit to beneficiary
+        .build();
+
+    // Send XCM
+    self.env()
+        .xcm_send(
+            &VersionedLocation::V5(destination),
+            &VersionedXcm::V5(message),
+        )
+        .map_err(|_| Error::XcmSendFailed)?;
+
+    Ok(())
+}
+```
+
+**Key Points:**
+- Use `receive_teleported_asset` (NOT `withdraw_asset` or `initiate_teleport`)
+- Always `clear_origin()` after receiving for security
+- Use `(Parent, amount)` for relay chain asset reference
+- **Use `env().to_account_id(address)` to convert Address → AccountId (32-byte)**
+- Order matters: Receive → Clear → Buy → Deposit
+
+**Usage (Production-Ready!):**
+```rust
+// Users just pass their Address - contract handles conversion automatically!
+contract.teleport(my_address, 1_000_000_000_000)?;
+```
+
+**Key Method:**
+```rust
+// Convert 20-byte Address to 32-byte AccountId
+let account_id = self.env().to_account_id(address);
+// account_id.0 gives you [u8; 32]
+```
+
+10.3 RESERVE TRANSFERS (ASSET TRANSFERS)
+----------------------------------------
+Reserve transfers are for moving assets between chains where one chain acts as the reserve (holds the canonical asset).
+Example: Transferring USDC from Asset Hub (reserve) to Hydration (derivative).
+
+**To INITIATE a Reserve Transfer from the reserve chain:**
+Use `xcm_execute` locally with:
+1. WithdrawAsset - Withdraw asset from contract's holding
+2. InitiateReserveWithdraw - Lock asset on reserve and send to destination with nested XCM:
+   - BuyExecution - Pay for execution on destination
+   - DepositAsset - Deposit to beneficiary
+
+```rust
+use ink::xcm::prelude::*;
+
+const HYDRATION_PARA_ID: u32 = 2034;
+const USDC_ASSET_ID: u128 = 1337;
+const ASSETS_PALLET_INSTANCE: u8 = 50;
+
+#[ink(message)]
+pub fn transfer_usdc_to_hydration(
+    &mut self,
+    to: AccountId,  // 32-byte AccountId
+    usdc_amount: u128,
+) -> Result<()> {
+    // Destination: Hydration (para 2034)
+    let destination = Location::new(
+        1,                           // Parent (relay chain)
+        [Parachain(HYDRATION_PARA_ID)]  // Hydration
+    );
+
+    // Beneficiary on Hydration
+    let beneficiary: Location = AccountId32 {
+        network: None,
+        id: to.0,  // Extract [u8; 32] from AccountId
+    }.into();
+
+    // USDC asset location on Asset Hub
+    // X2(PalletInstance(50), GeneralIndex(1337))
+    let usdc_asset = Location::new(
+        0,  // Here (Asset Hub)
+        [
+            PalletInstance(ASSETS_PALLET_INSTANCE),
+            GeneralIndex(USDC_ASSET_ID),
+        ],
+    );
+
+    // Build XCM message to execute locally
+    let message: Xcm<()> = Xcm::builder_unsafe()
+        // Withdraw USDC from contract's account
+        .withdraw_asset((usdc_asset.clone(), usdc_amount))
+        // InitiateReserveWithdraw locks USDC on Asset Hub and sends nested XCM to Hydration
+        // Hydration will mint derivative USDC and execute the nested XCM
+        .initiate_reserve_withdraw(
+            All,
+            destination.clone(),
+            Xcm::builder_unsafe()
+                .buy_execution((usdc_asset.clone(), usdc_amount / 10), Unlimited)
+                .deposit_asset(All, beneficiary)
+                .build()
+        )
+        .build();
+
+    // Execute XCM locally
+    let weight = self.env()
+        .xcm_weigh(&VersionedXcm::V5(message.clone()))
+        .map_err(|_| Error::XcmExecuteFailed)?;
+
+    self.env()
+        .xcm_execute(&VersionedXcm::V5(message), weight)
+        .map_err(|_| Error::XcmExecuteFailed)?;
+
+    Ok(())
+}
+```
+
+**Key Points:**
+- Use `builder_unsafe()` for simpler XCM construction (skips state machine checks)
+- Use `withdraw_asset()` to withdraw from contract
+- Use `initiate_reserve_withdraw()` to lock on reserve and send to destination
+- Asset location for pallet-assets: `Location::new(0, [PalletInstance(X), GeneralIndex(Y)])`
+- The reserve (Asset Hub) holds the canonical asset
+- Destination (Hydration) mints a derivative when receiving
+
+**Difference from Teleport:**
+- **Teleport**: Burn on source, mint on destination (trusted chains only)
+- **Reserve Transfer**: Lock on reserve, mint derivative on destination (any chains)
+
+**Full Example Contract:**
+See `/hydration_usdc_transfer/lib.rs` for a complete working example.
+
+===========================================
+11. COMMON PATTERNS FROM EXAMPLES
+===========================================
+
+11.1 ERC20 TOKEN COMPLETE
+-------------------------
+```rust
+#![cfg_attr(not(feature = "std"), no_std, no_main)]
+
+#[ink::contract]
+mod erc20 {
+    use ink::{U256, storage::Mapping};
+
+    #[ink(storage)]
+    #[derive(Default)]
+    pub struct Erc20 {
+        total_supply: U256,
+        balances: Mapping<Address, U256>,
+        allowances: Mapping<(Address, Address), U256>,
+    }
+
+    #[ink(event)]
+    pub struct Transfer {
+        #[ink(topic)]
+        from: Option<Address>,
+        #[ink(topic)]
+        to: Option<Address>,
+        value: U256,
+    }
+
+    #[ink(event)]
+    pub struct Approval {
+        #[ink(topic)]
+        owner: Address,
+        #[ink(topic)]
+        spender: Address,
+        value: U256,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    #[ink::error]
+    pub enum Error {
+        InsufficientBalance,
+        InsufficientAllowance,
+    }
+
+    pub type Result<T> = core::result::Result<T, Error>;
+
+    impl Erc20 {
+        #[ink(constructor)]
+        pub fn new(total_supply: U256) -> Self {
+            let mut balances = Mapping::default();
+            let caller = Self::env().caller();
+            balances.insert(caller, &total_supply);
+
+            Self::env().emit_event(Transfer {
+                from: None,
+                to: Some(caller),
+                value: total_supply,
+            });
+
+            Self {
+                total_supply,
+                balances,
+                allowances: Default::default(),
+            }
+        }
+
+        #[ink(message)]
+        pub fn total_supply(&self) -> U256 {
+            self.total_supply
+        }
+
+        #[ink(message)]
+        pub fn balance_of(&self, owner: Address) -> U256 {
+            self.balances.get(owner).unwrap_or_default()
+        }
+
+        #[ink(message)]
+        pub fn allowance(&self, owner: Address, spender: Address) -> U256 {
+            self.allowances.get((owner, spender)).unwrap_or_default()
+        }
+
+        #[ink(message)]
+        pub fn transfer(&mut self, to: Address, value: U256) -> Result<()> {
+            let from = self.env().caller();
+            self.transfer_from_to(&from, &to, value)
+        }
+
+        #[ink(message)]
+        pub fn approve(&mut self, spender: Address, value: U256) -> Result<()> {
+            let owner = self.env().caller();
+            self.allowances.insert((owner, spender), &value);
+
+            self.env().emit_event(Approval {
+                owner,
+                spender,
+                value,
+            });
+
+            Ok(())
+        }
+
+        #[ink(message)]
+        pub fn transfer_from(
+            &mut self,
+            from: Address,
+            to: Address,
+            value: U256,
+        ) -> Result<()> {
+            let caller = self.env().caller();
+            let allowance = self.allowance(from, caller);
+
+            if allowance < value {
+                return Err(Error::InsufficientAllowance);
+            }
+
+            self.transfer_from_to(&from, &to, value)?;
+            self.allowances.insert((from, caller), &(allowance - value));
+
+            Ok(())
+        }
+
+        fn transfer_from_to(
+            &mut self,
+            from: &Address,
+            to: &Address,
+            value: U256,
+        ) -> Result<()> {
+            let from_balance = self.balance_of(*from);
+            if from_balance < value {
+                return Err(Error::InsufficientBalance);
+            }
+
+            self.balances.insert(from, &(from_balance - value));
+            let to_balance = self.balance_of(*to);
+            self.balances.insert(to, &(to_balance + value));
+
+            self.env().emit_event(Transfer {
+                from: Some(*from),
+                to: Some(*to),
+                value,
+            });
+
+            Ok(())
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[ink::test]
+        fn new_works() {
+            let erc20 = Erc20::new(1000.into());
+            let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+            assert_eq!(erc20.balance_of(accounts.alice), 1000.into());
+        }
+
+        #[ink::test]
+        fn transfer_works() {
+            let mut erc20 = Erc20::new(1000.into());
+            let accounts = ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+
+            assert!(erc20.transfer(accounts.bob, 100.into()).is_ok());
+            assert_eq!(erc20.balance_of(accounts.alice), 900.into());
+            assert_eq!(erc20.balance_of(accounts.bob), 100.into());
+        }
+    }
+}
+```
+
+11.2 MULTISIG WALLET
+--------------------
+```rust
+#[ink::contract]
+mod multisig {
+    use ink::prelude::vec::Vec;
+    use ink::storage::Mapping;
+
+    #[ink(storage)]
+    pub struct Multisig {
+        owners: Vec<Address>,
+        required: u32,
+        transactions: Mapping<u32, Transaction>,
+        confirmations: Mapping<(u32, Address), bool>,
+        tx_count: u32,
+    }
+
+    #[derive(scale::Encode, scale::Decode)]
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+    pub struct Transaction {
+        to: Address,
+        value: U256,
+        executed: bool,
+    }
+
+    impl Multisig {
+        #[ink(constructor)]
+        pub fn new(owners: Vec<Address>, required: u32) -> Self {
+            assert!(required > 0 && required <= owners.len() as u32);
+            Self {
+                owners,
+                required,
+                transactions: Mapping::default(),
+                confirmations: Mapping::default(),
+                tx_count: 0,
+            }
+        }
+
+        #[ink(message)]
+        pub fn submit_transaction(&mut self, to: Address, value: U256) -> u32 {
+            let tx_id = self.tx_count;
+            self.transactions.insert(tx_id, &Transaction {
+                to,
+                value,
+                executed: false,
+            });
+            self.tx_count += 1;
+
+            // Auto-confirm from submitter
+            self.confirm_transaction(tx_id);
+
+            tx_id
+        }
+
+        #[ink(message)]
+        pub fn confirm_transaction(&mut self, tx_id: u32) {
+            let caller = self.env().caller();
+            assert!(self.owners.contains(&caller));
+
+            self.confirmations.insert((tx_id, caller), &true);
+
+            // Try to execute if enough confirmations
+            if self.count_confirmations(tx_id) >= self.required {
+                self.execute_transaction(tx_id);
+            }
+        }
+
+        fn count_confirmations(&self, tx_id: u32) -> u32 {
+            self.owners.iter()
+                .filter(|&owner| {
+                    self.confirmations.get((tx_id, *owner)).unwrap_or(false)
+                })
+                .count() as u32
+        }
+
+        fn execute_transaction(&mut self, tx_id: u32) {
+            let mut tx = self.transactions.get(tx_id).unwrap();
+            if !tx.executed {
+                tx.executed = true;
+                self.transactions.insert(tx_id, &tx);
+
+                // Execute transfer
+                self.env().transfer(tx.to, tx.value).unwrap();
+            }
+        }
+    }
+}
+```
+
+===========================================
+12. PERFORMANCE & OPTIMIZATION
+===========================================
+
+12.1 GAS OPTIMIZATION TIPS
+---------------------------
+1. Use references in internal functions:
+```rust
+// BAD - copies address
+fn check_balance(&self, owner: Address) -> U256 {
+    self.balances.get(owner).unwrap_or_default()
+}
+
+// GOOD - uses reference
+fn check_balance(&self, owner: &Address) -> U256 {
+    self.balances.get(owner).unwrap_or_default()
+}
+```
+
+2. Batch operations when possible:
+```rust
+// Instead of multiple single inserts
+#[ink(message)]
+pub fn airdrop(&mut self, recipients: Vec<(Address, U256)>) {
+    for (recipient, amount) in recipients {
+        self.balances.insert(recipient, &amount);
+    }
+}
+```
+
+3. Use packed storage for frequently accessed data:
+```rust
+#[ink(storage)]
+pub struct MyContract {
+    // Frequently accessed together - stored as one cell
+    config: Config,
+    // Rarely accessed - separate cell
+    metadata: Lazy<LargeMetadata>,
+}
+```
+
+4. Minimize storage reads:
+```rust
+// BAD - reads twice
+let balance = self.balance_of(owner);
+if balance > 0 {
+    self.transfer_internal(owner, to, balance);
+}
+
+// GOOD - read once, reuse
+let balance = self.balance_of(owner);
+if balance > 0 {
+    // Use balance value directly
+}
+```
+
+12.2 STORAGE LAYOUT OPTIMIZATION
+---------------------------------
+Order fields from most to least frequently accessed:
+
+```rust
+#[ink(storage)]
+pub struct OptimizedContract {
+    // Hot path - always needed
+    owner: Address,
+    active: bool,
+
+    // Warm path - sometimes needed
+    balances: Mapping<Address, U256>,
+
+    // Cold path - rarely needed
+    metadata: Lazy<Metadata>,
+    archive: Lazy<Archive>,
+}
+```
+
+===========================================
+13. SECURITY BEST PRACTICES
+===========================================
+
+13.1 CHECKS-EFFECTS-INTERACTIONS
+---------------------------------
+```rust
+#[ink(message)]
+pub fn withdraw(&mut self, amount: U256) -> Result<()> {
+    let caller = self.env().caller();
+
+    // 1. CHECKS - validate before any state changes
+    let balance = self.balance_of(caller);
+    if balance < amount {
+        return Err(Error::InsufficientBalance);
+    }
+
+    // 2. EFFECTS - update state before external calls
+    self.balances.insert(caller, &(balance - amount));
+
+    // 3. INTERACTIONS - external calls last
+    self.env().transfer(caller, amount)?;
+
+    Ok(())
+}
+```
+
+13.2 INTEGER OVERFLOW PROTECTION
+---------------------------------
+Rust protects against overflow in debug mode, but use checked operations:
+
+```rust
+// Use checked_add, checked_sub, checked_mul
+let result = value.checked_add(amount)
+    .ok_or(Error::Overflow)?;
+
+// Or saturating operations
+let result = value.saturating_add(amount);
+
+// Wrapping operations (use carefully!)
+let result = value.wrapping_add(amount);
+```
+
+13.3 ACCESS CONTROL
+-------------------
+Always verify caller permissions:
+
+```rust
+fn ensure_owner(&self) -> Result<()> {
+    if self.env().caller() != self.owner {
+        return Err(Error::Unauthorized);
+    }
+    Ok(())
+}
+
+#[ink(message)]
+pub fn admin_function(&mut self) -> Result<()> {
+    self.ensure_owner()?;
+    // ... privileged logic ...
+    Ok(())
+}
+```
+
+===========================================
+14. DEBUGGING & TESTING
+===========================================
+
+14.1 ENVIRONMENT TESTING HELPERS
+---------------------------------
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ink::env::test;
+
+    #[ink::test]
+    fn test_with_accounts() {
+        let accounts = test::default_accounts::<ink::env::DefaultEnvironment>();
+
+        // Set caller
+        test::set_caller::<ink::env::DefaultEnvironment>(accounts.alice);
+
+        // Set block number
+        test::set_block_number::<ink::env::DefaultEnvironment>(10);
+
+        // Set block timestamp
+        test::set_block_timestamp::<ink::env::DefaultEnvironment>(1000);
+
+        // Advance block
+        test::advance_block::<ink::env::DefaultEnvironment>();
+
+        // Set contract balance
+        test::set_account_balance::<ink::env::DefaultEnvironment>(
+            accounts.alice,
+            1000000
+        );
+
+        // Set value transferred
+        test::set_value_transferred::<ink::env::DefaultEnvironment>(100);
+    }
+}
+```
+
+14.2 EVENT TESTING
+------------------
+```rust
+#[ink::test]
+fn test_events_emitted() {
+    let mut contract = MyContract::new();
+    contract.do_something();
+
+    let emitted_events = test::recorded_events()
+        .collect::<Vec<_>>();
+
+    assert_eq!(emitted_events.len(), 1);
+
+    let event = &emitted_events[0];
+    let decoded = <MyEvent as scale::Decode>::decode(&mut &event.data[..])
+        .expect("invalid event data");
+
+    assert_eq!(decoded.value, 42);
+}
+```
+
+===========================================
+15. DEPLOYMENT & INTERACTION
+===========================================
+
+15.1 USING CARGO-CONTRACT
+--------------------------
+```bash
+# Build contract
+cargo contract build
+
+# Build with release optimizations
+cargo contract build --release
+
+# Upload code only (no instantiation)
+cargo contract upload --url ws://localhost:9944
+
+# Instantiate from uploaded code
+cargo contract instantiate \
+    --constructor new \
+    --args 1000 \
+    --suri //Alice \
+    --url ws://localhost:9944
+
+# Call contract
+cargo contract call \
+    --contract 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY \
+    --message transfer \
+    --args 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty 100 \
+    --suri //Alice \
+    --url ws://localhost:9944
+```
+
+15.2 PROGRAMMATIC DEPLOYMENT (E2E)
+-----------------------------------
+```rust
+#[ink_e2e::test]
+async fn deploy_and_call<Client: E2EBackend>(
+    mut client: Client
+) -> E2EResult<()> {
+    // Deploy
+    let mut constructor = MyContractRef::new(1000.into());
+    let contract = client
+        .instantiate("my_contract", &ink_e2e::alice(), &mut constructor)
+        .value(1_000_000)  // Send value
+        .submit()
+        .await?;
+
+    // Get address
+    let contract_addr = contract.account_id;
+
+    // Call message
+    let mut call_builder = contract.call_builder::<MyContract>();
+    let call = call_builder.transfer(
+        ink_e2e::bob().public_key().0.into(),
+        100.into()
+    );
+
+    let result = client
+        .call(&ink_e2e::alice(), &call)
+        .submit()
+        .await?;
+
+    assert!(result.return_value().is_ok());
+
+    Ok(())
+}
+```
+
+===========================================
+16. CUSTOM ENVIRONMENT
+===========================================
+
+16.1 DEFINING CUSTOM ENVIRONMENT
+---------------------------------
+For chains with different types than default:
+
+```rust
+#[derive(Clone)]
+pub struct MyCustomEnvironment;
+
+impl ink::env::Environment for MyCustomEnvironment {
+    const NATIVE_TO_ETH_RATIO: u32 = 1_000_000;
+
+    type AccountId = [u8; 32];  // Different from default
+    type Balance = u128;
+    type Hash = [u8; 32];
+    type Timestamp = u64;
+    type BlockNumber = u32;
+    type EventRecord = ();
+}
+
+#[ink::contract(env = MyCustomEnvironment)]
+mod my_contract {
+    // Contract will use custom types
+    #[ink(storage)]
+    pub struct MyContract {
+        owner: AccountId,  // Now [u8; 32] instead of Address
+        balance: Balance,  // u128
+    }
+
+    // ... rest of contract ...
+}
+```
+
+===========================================
+17. SOLIDITY ABI COMPATIBILITY
+===========================================
+
+17.1 SOLIDITY ABI MODE
+----------------------
+Can generate Solidity-compatible ABI:
+
+Cargo.toml:
+```toml
+[package.metadata.contract]
+abi = "sol"  # or "all" for both ink! and Solidity
+```
+
+Contract stays the same:
+```rust
+#[ink::contract]
+mod my_contract {
+    use ink::U256;
+
+    #[ink(storage)]
+    pub struct MyContract {
+        value: U256,  // Maps to uint256 in Solidity
+    }
+
+    #[ink(message)]
+    pub fn get_value(&self) -> U256 {
+        self.value
+    }
+}
+```
+
+Generates Solidity ABI JSON compatible with web3.js, ethers.js!
+
+===========================================
+18. REAL-WORLD COMPLETE EXAMPLES
+===========================================
+
+18.1 DNS REGISTRY
+-----------------
+```rust
+#[ink::contract]
+mod dns {
+    use ink::prelude::{string::String, vec::Vec};
+    use ink::storage::Mapping;
+
+    #[ink(storage)]
+    pub struct Dns {
+        owner: Address,
+        name_to_address: Mapping<String, Address>,
+        name_to_owner: Mapping<String, Address>,
+        default_address: Address,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    #[ink::error]
+    pub enum Error {
+        NameAlreadyTaken,
+        NotNameOwner,
+        InvalidName,
+    }
+
+    type Result<T> = core::result::Result<T, Error>;
+
+    impl Dns {
+        #[ink(constructor)]
+        pub fn new() -> Self {
+            Self {
+                owner: Self::env().caller(),
+                name_to_address: Mapping::default(),
+                name_to_owner: Mapping::default(),
+                default_address: Address::from([0; 20]),
+            }
+        }
+
+        #[ink(message)]
+        pub fn register(&mut self, name: String) -> Result<()> {
+            if name.is_empty() || name.len() > 64 {
+                return Err(Error::InvalidName);
+            }
+
+            let caller = self.env().caller();
+
+            if self.name_to_owner.contains(&name) {
+                return Err(Error::NameAlreadyTaken);
+            }
+
+            self.name_to_owner.insert(&name, &caller);
+            self.name_to_address.insert(&name, &caller);
+
+            Ok(())
+        }
+
+        #[ink(message)]
+        pub fn set_address(&mut self, name: String, addr: Address) -> Result<()> {
+            let caller = self.env().caller();
+            let owner = self.name_to_owner.get(&name)
+                .ok_or(Error::InvalidName)?;
+
+            if owner != caller {
+                return Err(Error::NotNameOwner);
+            }
+
+            self.name_to_address.insert(&name, &addr);
+            Ok(())
+        }
+
+        #[ink(message)]
+        pub fn resolve(&self, name: String) -> Address {
+            self.name_to_address.get(&name)
+                .unwrap_or(self.default_address)
+        }
+
+        #[ink(message)]
+        pub fn transfer(&mut self, name: String, to: Address) -> Result<()> {
+            let caller = self.env().caller();
+            let owner = self.name_to_owner.get(&name)
+                .ok_or(Error::InvalidName)?;
+
+            if owner != caller {
+                return Err(Error::NotNameOwner);
+            }
+
+            self.name_to_owner.insert(&name, &to);
+            Ok(())
+        }
+    }
+}
+```
+
+===========================================
+19. COMMON PITFALLS & SOLUTIONS
+===========================================
+
+19.1 COMMON ERRORS
+------------------
+1. "Cannot find derive macro `Storable`"
+   Solution: Add #[ink::storage_item] or derive manually
+
+2. "Type doesn't implement `Packed`"
+   Solution: Non-packed types can't be in Vec or as Mapping values
+
+3. "Selector collision"
+   Solution: Use #[ink(selector = ...)] or namespaces
+
+4. "Buffer too small"
+   Solution: Data exceeds 16KB static buffer, batch operations
+
+5. "Storage decode error"
+   Solution: Storage layout changed between versions, needs migration
+
+6. "Type mismatch: expected u128, found U256" or "mismatched types"
+   **CRITICAL:** In ink! v6, env().balance() and env().transferred_value() return U256,
+   but native Polkadot assets (DOT, KSM) are u128!
+
+   Solution: Define a type alias and convert between U256 and u128:
+   ```rust
+   // Define type alias for native asset
+   pub type DotBalance = u128;
+
+   #[ink(message)]
+   pub fn deposit(&mut self) -> Result<()> {
+       // Convert U256 to u128
+       let amount: DotBalance = self.env().transferred_value()
+           .try_into()
+           .map_err(|_| Error::BalanceConversionFailed)?;
+       Ok(())
+   }
+
+   #[ink(message)]
+   pub fn transfer(&mut self, amount: DotBalance) -> Result<()> {
+       // Convert u128 to U256 for comparison
+       if self.env().balance() < amount.into() {
+           return Err(Error::InsufficientBalance);
+       }
+       // ... rest of code
+   }
+
+   // Use DotBalance (u128) in events
+   #[ink(event)]
+   pub struct Transfer {
+       amount: DotBalance,  // u128 for native asset
+   }
+   ```
+
+7. "Address type mismatch in XCM" or "expected [u8; 32], found Address"
+   **CRITICAL:** ink! uses 20-byte Address (H160), but Polkadot uses 32-byte addresses!
+
+   **Solution:** Use `env().to_account_id()` to convert Address → AccountId:
+   ```rust
+   #[ink(message)]
+   pub fn teleport(&mut self, to: Address, amount: DotBalance) -> Result<()> {
+       // Convert Address to 32-byte AccountId
+       let account_id = self.env().to_account_id(to);
+
+       let beneficiary = ink::xcm::prelude::AccountId32 {
+           network: None,
+           id: account_id.0, // Extract [u8; 32]
+       };
+       // ... rest of XCM logic
+   }
+   ```
+
+   This is production-ready - users just pass their normal Address!
+
+8. "XCM not found" or "use of undeclared crate ink::xcm"
+   Solution: Enable the xcm feature in Cargo.toml:
+   ```toml
+   ink = { version = "6", default-features = false, features = ["xcm"] }
+   ```
+
+9. "XCM teleport fails" or "Assets not received on destination"
+   **CRITICAL:** Wrong XCM instruction order for teleports!
+
+   ❌ WRONG - Don't use initiate_teleport or withdraw_asset:
+   ```rust
+   let message = Xcm::builder()
+       .withdraw_asset(asset.clone())
+       .initiate_teleport(...)
+       .build();
+   ```
+
+   ✅ CORRECT - Use receive_teleported_asset, clear_origin, buy_execution, deposit_asset:
+   ```rust
+   let message = Xcm::builder()
+       .receive_teleported_asset(asset.clone())  // 1. Receive
+       .clear_origin()                           // 2. Clear (security)
+       .buy_execution((Parent, amount / 10), Unlimited)  // 3. Buy
+       .deposit_asset(All, beneficiary)          // 4. Deposit
+       .build();
+   ```
+
+   Order matters! The instructions must be in this exact sequence.
+
+===========================================
+20. REFERENCE: KEY TRAITS & TYPES
+===========================================
+
+20.1 STORAGE TRAITS
+-------------------
+- Storable: Can be encoded/decoded to storage
+- Packed: Stored in single cell
+- StorageKey: Has associated storage key
+- StorableHint: Type-level storage hints
+
+20.2 ENVIRONMENT TRAIT
+----------------------
+```rust
+pub trait Environment {
+    const NATIVE_TO_ETH_RATIO: u32;
+    type AccountId: ...;
+    type Balance: ...;
+    type Hash: ...;
+    type Timestamp: ...;
+    type BlockNumber: ...;
+    type EventRecord: ...;
+}
+```
+
+20.3 KEY MACROS
+---------------
+- #[ink::contract]: Define contract module
+- #[ink(storage)]: Define storage struct
+- #[ink(constructor)]: Define constructor
+- #[ink(message)]: Define callable message
+- #[ink(event)]: Define event
+- #[ink(topic)]: Mark event field as indexed
+- #[ink::test]: Unit test
+- #[ink_e2e::test]: E2E test
+- #[ink::trait_definition]: Define trait
+- #[ink::contract_ref]: Define contract interface
+
+===========================================
+END OF TECHNICAL GUIDE
+===========================================
+
+This guide covers the deep technical aspects of ink! smart contract development
+based on analysis of the actual ink! v6 codebase. For additional examples and
+patterns, refer to the integration-tests/ directory in the ink! repository.
+
+Key Resources:
+- GitHub: https://github.com/use-ink/ink
+- Examples: https://github.com/use-ink/ink-examples
+- Docs: https://use.ink
+- Crate Docs: https://docs.rs/ink/latest/ink
+
+Remember:
+- Storage is key-based, not address-based
+- Contracts compile to RISC-V for PolkaVM
+- Use cargo-contract for building
+- Test thoroughly with both unit and E2E tests
+- Follow checks-effects-interactions pattern
+- Optimize storage layout for gas efficiency

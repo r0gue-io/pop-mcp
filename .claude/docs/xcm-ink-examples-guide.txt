@@ -1,0 +1,2523 @@
+===========================================
+XCM INK! PRACTICAL EXAMPLES GUIDE
+Real-World Contract Examples for Cross-Chain Operations
+===========================================
+
+This guide provides comprehensive real-world examples of ink! smart contracts
+that interact with XCM (Cross-Consensus Messaging) on Polkadot. All examples
+are based on actual deployed contracts on PassetHub testnet.
+
+IMPORTANT: These examples are for educational purposes only. They demonstrate
+XCM patterns but are intentionally permissionless for simplicity. DO NOT use
+them in production without proper access controls.
+
+RELATED DOCUMENTATION:
+- xcm-comprehensive-guide.txt: Complete XCM theoretical and technical guide
+- ink-llms.txt: Comprehensive ink! language guide
+- ink-technical-guide.txt: Deep technical ink! reference
+- pop-cli-comprehensive-guide.txt: Pop CLI tooling for development
+
+===========================================
+TABLE OF CONTENTS
+===========================================
+
+1. OVERVIEW
+2. DEPLOYMENT TARGET (PassetHub)
+3. EXAMPLE 1: TELEPORTING ASSETS
+4. EXAMPLE 2: DEX SWAPS VIA XCM TRANSACT
+5. EXAMPLE 3: CROSS-CHAIN IDENTITY MANAGEMENT
+6. COMMON PATTERNS & BEST PRACTICES
+7. DEVELOPMENT WORKFLOW WITH POP CLI
+8. TROUBLESHOOTING
+9. ADVANCED TOPICS
+
+===========================================
+1. OVERVIEW
+===========================================
+
+1.1 WHAT THESE EXAMPLES DEMONSTRATE
+------------------------------------
+These contracts showcase three fundamental XCM patterns in ink!:
+
+1. **Asset Teleporting** - Moving native assets between trusted chains
+2. **XCM Transact** - Executing runtime calls on remote chains
+3. **Sovereign Accounts** - Managing deterministic cross-chain accounts
+4. **Multi-step XCM Flows** - Combining multiple XCM operations
+
+All contracts are deployed on PassetHub (ParaID 1111) and interact with:
+- People Chain (ParaID 1004) - For identity management
+- PassetHub's own pallets - For DEX swaps
+
+1.2 WHY THESE EXAMPLES MATTER
+------------------------------
+- **Real deployed contracts** - Not theoretical, actually working on testnet
+- **Complete workflows** - From deposit to cross-chain execution
+- **Production patterns** - Despite being educational, they use real XCM patterns
+- **Verifiable transactions** - All examples link to live transactions
+
+1.3 PREREQUISITES
+-----------------
+Before working with these examples, ensure you understand:
+- ink! v6 basics (see ink-llms.txt)
+- XCM fundamentals (see xcm-comprehensive-guide.txt)
+- Pop CLI usage (see pop-cli-comprehensive-guide.txt)
+- SCALE encoding (used for runtime calls)
+- Polkadot account types (AccountId32, AccountId20)
+
+===========================================
+2. DEPLOYMENT TARGET (PassetHub)
+===========================================
+
+2.1 PASSET HUB TESTNET
+----------------------
+All contracts in this guide are deployed on **PassetHub**, a testnet system
+parachain for the Paseo relay chain.
+
+Network Details:
+- **ParaID**: 1111
+- **RPC**: wss://testnet-passet-hub.polkadot.io
+- **Explorer**: https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Ftestnet-passet-hub.polkadot.io
+- **Native Token**: PAS (Paseo native token)
+
+2.2 WHY PASSET HUB?
+-------------------
+PassetHub is ideal for XCM examples because:
+- System parachain (trusted by other chains)
+- Supports pallet-contracts (can deploy ink! contracts)
+- Has AssetConversion pallet (DEX functionality)
+- Trusted relationship with People Chain (for teleports)
+- Active testnet environment
+
+2.3 GETTING TESTNET FUNDS
+--------------------------
+To interact with these contracts, you need PAS tokens:
+1. Get PAS from Paseo faucet: https://faucet.polkadot.io/paseo
+2. Transfer to PassetHub via XCM
+3. Map your account before deploying contracts:
+   ```bash
+   pop call chain \
+     --pallet revive \
+     --function map_account \
+     -u wss://testnet-passet-hub.polkadot.io \
+     -s "YOUR_SEED"
+   ```
+
+===========================================
+3. EXAMPLE 1: TELEPORTING ASSETS
+===========================================
+
+3.1 CONTRACT OVERVIEW
+---------------------
+**Contract**: people_chain_teleport
+**Address**: 0x779bb1100afb121b8ffdc6ae65e823add7603fa4
+**Purpose**: Teleport PAS tokens from PassetHub to People Chain
+
+This contract demonstrates the most common XCM operation: teleporting native
+assets between trusted chains in the Polkadot ecosystem.
+
+3.2 CONTRACT CODE ANALYSIS
+---------------------------
+
+Storage Structure:
+```rust
+#[ink(storage)]
+pub struct PeopleChainTeleport {
+    owner: Address,  // Contract owner (for reference)
+}
+```
+
+Key Constants:
+```rust
+const PEOPLE_CHAIN_PARA_ID: u32 = 1004;  // People Chain parachain ID
+```
+
+Error Types:
+```rust
+pub enum Error {
+    XcmExecuteFailed,           // XCM execution failed locally
+    XcmSendFailed,              // XCM send to remote chain failed
+    InsufficientBalance,        // Contract lacks funds
+    TransferFailed,             // Transfer operation failed
+    BalanceConversionFailed,    // U256 to u128 conversion failed
+}
+```
+
+3.3 CORE FUNCTIONALITY
+----------------------
+
+A. Deposit Function (Payable):
+```rust
+#[ink(message)]
+#[ink(payable)]
+pub fn deposit(&mut self) -> Result<()> {
+    let caller = self.env().caller();
+    let amount: DotBalance = self
+        .env()
+        .transferred_value()
+        .try_into()
+        .map_err(|_| Error::BalanceConversionFailed)?;
+
+    self.env().emit_event(Deposited { from: caller, amount });
+    Ok(())
+}
+```
+
+Key Points:
+- `#[ink(payable)]` allows receiving native tokens
+- `transferred_value()` returns U256, must convert to u128
+- Emits event for tracking deposits
+- No access control (educational only!)
+
+B. Get Balance Function:
+```rust
+#[ink(message)]
+pub fn get_balance(&self) -> Result<DotBalance> {
+    self.env()
+        .balance()
+        .try_into()
+        .map_err(|_| Error::BalanceConversionFailed)
+}
+```
+
+Key Points:
+- Read-only query (doesn't modify state)
+- Returns contract's current balance
+- Useful for checking if contract has funds before teleporting
+
+C. Teleport Function (THE MAIN FEATURE):
+```rust
+#[ink(message)]
+pub fn teleport(&mut self, to: AccountId, amount: DotBalance) -> Result<()> {
+    // 1. Check contract has sufficient balance
+    let contract_balance = self.env().balance();
+    let amount_u256: U256 = amount.into();
+    if contract_balance < amount_u256 {
+        return Err(Error::InsufficientBalance);
+    }
+
+    // 2. Build destination location (People Chain)
+    let destination = Location::new(
+        1,                                 // Parent (relay chain)
+        [Parachain(PEOPLE_CHAIN_PARA_ID)] // People Chain parachain
+    );
+
+    // 3. Build beneficiary location (recipient on People Chain)
+    let beneficiary: Location = AccountId32 {
+        network: None,
+        id: to.0,
+    }.into();
+
+    // 4. Build XCM message
+    let message: Xcm<()> = Xcm::builder_unsafe()
+        // Withdraw from contract's account on PassetHub
+        .withdraw_asset((Parent, amount))
+        // Initiate teleport: burn locally, send message to mint on destination
+        .initiate_teleport(
+            All,                      // Transfer all withdrawn assets
+            destination.clone(),      // Destination: People Chain
+            Xcm::builder_unsafe()     // Nested XCM to execute on People Chain
+                .buy_execution((Parent, amount / 10), Unlimited)  // Pay for execution
+                .deposit_asset(All, beneficiary)                   // Deposit to beneficiary
+                .build()
+        )
+        .build();
+
+    // 5. Calculate weight for XCM execution
+    let weight = self.env()
+        .xcm_weigh(&VersionedXcm::V5(message.clone()))
+        .map_err(|_| Error::XcmExecuteFailed)?;
+
+    // 6. Execute XCM locally
+    self.env()
+        .xcm_execute(&VersionedXcm::V5(message), weight)
+        .map_err(|_| Error::XcmExecuteFailed)?;
+
+    // 7. Emit event
+    self.env().emit_event(TeleportInitiated { to, amount });
+
+    Ok(())
+}
+```
+
+3.4 DETAILED XCM FLOW EXPLANATION
+----------------------------------
+
+Step-by-Step Teleport Process:
+
+1. **Local Validation**:
+   - Check contract has enough balance
+   - Validate amount is positive
+   - Ensure destination is valid
+
+2. **Build Location (Destination)**:
+   ```rust
+   Location::new(1, [Parachain(PEOPLE_CHAIN_PARA_ID)])
+   ```
+   - `1` = Go up to parent (relay chain)
+   - `Parachain(1004)` = Then down to People Chain
+   - This is the "universal location" of People Chain
+
+3. **Build Location (Beneficiary)**:
+   ```rust
+   AccountId32 { network: None, id: to.0 }.into()
+   ```
+   - AccountId32 = 32-byte account format
+   - `network: None` = Same network as message origin
+   - Converts to Location automatically
+
+4. **Withdraw Asset**:
+   ```rust
+   .withdraw_asset((Parent, amount))
+   ```
+   - Withdraws PAS from contract's account
+   - Puts assets into "holding register"
+   - `Parent` = Native relay chain asset (PAS)
+
+5. **Initiate Teleport**:
+   ```rust
+   .initiate_teleport(All, destination, nested_xcm)
+   ```
+   - Takes ALL assets from holding
+   - Burns them locally (removes from PassetHub)
+   - Sends nested XCM to People Chain
+   - People Chain will mint equivalent assets
+
+6. **Nested XCM (Executed on People Chain)**:
+   ```rust
+   .buy_execution((Parent, amount / 10), Unlimited)
+   .deposit_asset(All, beneficiary)
+   ```
+   - `buy_execution`: Pay for execution on People Chain
+   - Uses 10% of teleported amount for fees
+   - `Unlimited`: No weight limit (trust destination)
+   - `deposit_asset`: Give remaining assets to beneficiary
+
+7. **Execute Locally**:
+   ```rust
+   xcm_weigh() // Calculate weight
+   xcm_execute() // Execute the message
+   ```
+   - `xcm_weigh`: Estimate computational cost
+   - `xcm_execute`: Actually execute the XCM
+   - Returns error if execution fails
+
+3.5 WHY TELEPORTS WORK
+-----------------------
+Teleports only work between **trusted chains**:
+- PassetHub and People Chain are both system parachains
+- They trust each other's consensus and state
+- PassetHub can burn assets knowing People Chain will mint them
+- People Chain trusts burn proofs from PassetHub
+
+For non-trusted chains, use **Reserve Transfers** instead (see section 9).
+
+3.6 USING THE CONTRACT
+-----------------------
+
+A. Build and Deploy:
+```bash
+cd people_chain_teleport
+pop build --release
+pop up -u wss://testnet-passet-hub.polkadot.io --use-wallet
+```
+
+B. Deposit PAS into Contract:
+```bash
+pop call contract \
+  -p ./people_chain_teleport \
+  -u wss://testnet-passet-hub.polkadot.io \
+  --contract 0x779bb1100afb121b8ffdc6ae65e823add7603fa4 \
+  --message deposit \
+  --value 1000000000000 \  # 1 PAS (10^10 units)
+  --use-wallet \
+  -x
+```
+
+C. Check Contract Balance:
+```bash
+pop call contract \
+  -p ./people_chain_teleport \
+  -u wss://testnet-passet-hub.polkadot.io \
+  --contract 0x779bb1100afb121b8ffdc6ae65e823add7603fa4 \
+  --message get_balance \
+  --use-wallet
+```
+
+D. Teleport to People Chain:
+```bash
+# Get your AccountId first (32 bytes)
+# Example: 0x8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48
+
+pop call contract \
+  -p ./people_chain_teleport \
+  -u wss://testnet-passet-hub.polkadot.io \
+  --contract 0x779bb1100afb121b8ffdc6ae65e823add7603fa4 \
+  --message teleport \
+  --args <YOUR_ACCOUNT_ID> 500000000000 \  # 0.5 PAS
+  --use-wallet \
+  -x
+```
+
+E. Verify on People Chain:
+- Connect to People Chain RPC: wss://sys.ibp.network/people-paseo
+- Check your account balance
+- Should see teleported PAS minus fees
+
+3.7 REAL TRANSACTION EXAMPLES
+------------------------------
+**Teleport initiated on PassetHub**:
+https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Ftestnet-passet-hub.polkadot.io#/explorer/query/0x1f270b11e7f3a92c814f9ca5483512ef6ef3c32a19cee8426e41d4a5e80af461
+
+**Received on People Chain**:
+https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Fsys.ibp.network%2Fpeople-paseo#/explorer/query/0x035c0ecc2047411e7e4f2e91b09b0095eabe3c15466b2475c4534aae7661caae
+
+Study these transactions to see:
+- XCM message structure
+- Event emissions
+- Fee deductions
+- Asset minting on destination
+
+3.8 COMMON ISSUES
+-----------------
+**"InsufficientBalance" Error**:
+- Contract doesn't have enough PAS
+- Solution: Call `deposit()` with more funds
+
+**"XcmExecuteFailed" Error**:
+- XCM message failed locally
+- Check: Message syntax, weight calculation
+- Debug: Use `xcm_weigh()` to check if message is valid
+
+**Funds Not Received on People Chain**:
+- Check: Did transaction succeed on PassetHub?
+- Wait: Cross-chain messages take 1-2 blocks
+- Verify: Are you checking the correct account?
+
+===========================================
+4. EXAMPLE 2: DEX SWAPS VIA XCM TRANSACT
+===========================================
+
+4.1 CONTRACT OVERVIEW
+---------------------
+**Contract**: swap_pas_for_usdc
+**Address**: 0x4ea5394ad19589052f7803f45ae4caa3041485b9
+**Purpose**: Swap PAS tokens for USDC on PassetHub's DEX
+
+This contract demonstrates using XCM's **Transact** instruction to call
+arbitrary runtime pallets - in this case, the AssetConversion pallet for DEX swaps.
+
+4.2 WHY THIS PATTERN MATTERS
+-----------------------------
+The Transact instruction is one of XCM's most powerful features:
+- Call ANY pallet on ANY chain
+- Execute signed or unsigned calls
+- Compose multiple operations
+- Access permissioned functionality
+
+This example shows LOCAL transact (same chain), but the pattern extends to
+remote chains (see Example 3).
+
+4.3 CONTRACT CODE ANALYSIS
+---------------------------
+
+Key Constants:
+```rust
+const USDC_ASSET_ID: u128 = 1337;           // USDC asset ID on PassetHub
+const ASSETS_PALLET_INSTANCE: u8 = 50;      // pallet-assets instance
+const ASSET_CONVERSION_PALLET: u8 = 56;     // pallet-asset-conversion index
+const SWAP_TOKENS_FOR_EXACT_TOKENS: u8 = 4; // swap function index
+```
+
+These indices are **crucial** - they must match the runtime configuration.
+Wrong indices = wrong pallet/function called = transaction fails.
+
+Storage (same as Example 1):
+```rust
+#[ink(storage)]
+pub struct SwapPasForUsdc {
+    owner: Address,
+}
+```
+
+4.4 CORE FUNCTIONALITY
+----------------------
+
+The main function is `swap_pas_to_usdc`:
+
+```rust
+#[ink(message)]
+pub fn swap_pas_to_usdc(
+    &mut self,
+    pas_amount: ContractBalance,      // PAS to spend (max)
+    min_usdc_out: ContractBalance,    // USDC to receive (min)
+    receiver: AccountId,               // Who gets the USDC
+) -> Result<()>
+```
+
+Parameters Explained:
+- `pas_amount`: Maximum PAS willing to spend
+- `min_usdc_out`: Minimum USDC expected (slippage protection)
+- `receiver`: Destination account for USDC
+
+Why separate receiver?
+- Contract can swap for others
+- Useful for contract compositions
+- Flexible liquidity management
+
+4.5 ASSET LOCATION DEFINITIONS
+-------------------------------
+
+```rust
+// PAS (native relay token)
+let pas_asset: Location = Parent.into();
+
+// USDC (pallet-assets token)
+let usdc_asset = Location::new(
+    0,                                      // Local (this parachain)
+    [
+        PalletInstance(ASSETS_PALLET_INSTANCE),  // pallet-assets
+        GeneralIndex(USDC_ASSET_ID),             // Asset ID 1337
+    ],
+);
+```
+
+Location Breakdown:
+- `Parent.into()` = `Location { parents: 1, interior: Here }`
+  - Represents relay chain native asset
+- `Location::new(0, [...])` = Local parachain asset
+  - `parents: 0` = Don't go up to relay
+  - `PalletInstance(50)` = pallet-assets instance
+  - `GeneralIndex(1337)` = Asset ID within that pallet
+
+4.6 BUILDING THE RUNTIME CALL
+------------------------------
+
+This is the most complex part - manually encoding a runtime call:
+
+```rust
+// Build swap path: [PAS, USDC]
+let path: Vec<Location> = vec![pas_asset.clone(), usdc_asset.clone()];
+
+// Encode the runtime call
+let mut swap_tokens_call = Vec::new();
+
+// 1. Pallet index (which pallet to call)
+swap_tokens_call.push(ASSET_CONVERSION_PALLET);  // 56
+
+// 2. Call index (which function in that pallet)
+swap_tokens_call.push(SWAP_TOKENS_FOR_EXACT_TOKENS);  // 4
+
+// 3. Encode parameters using SCALE encoding
+swap_tokens_call.extend_from_slice(&path.encode());         // Vec<Location>
+swap_tokens_call.extend_from_slice(&min_usdc_out.encode()); // u128
+swap_tokens_call.extend_from_slice(&pas_amount.encode());   // u128
+swap_tokens_call.extend_from_slice(&receiver.0.encode());   // AccountId32
+swap_tokens_call.extend_from_slice(&true.encode());         // bool (keep_alive)
+```
+
+Why Manual Encoding?
+- XCM Transact requires raw SCALE-encoded bytes
+- Can't use regular Rust function calls
+- Must match exact runtime function signature
+- Order and types must be precise
+
+Runtime Function Signature (AssetConversion pallet):
+```rust
+swap_tokens_for_exact_tokens(
+    path: Vec<AssetKind>,     // Swap path
+    amount_out: Balance,      // Exact output amount
+    amount_in_max: Balance,   // Max input amount
+    send_to: AccountId,       // Recipient
+    keep_alive: bool,         // Keep account alive
+)
+```
+
+4.7 BUILDING THE XCM MESSAGE
+-----------------------------
+
+```rust
+let swap_message: Xcm<()> = Xcm::builder_unsafe()
+    .transact(
+        OriginKind::SovereignAccount,  // Execute as contract's sovereign account
+        None,                           // No weight check (unlimited)
+        swap_tokens_call,               // The encoded runtime call
+    )
+    .build();
+```
+
+Transact Instruction Parameters:
+- `OriginKind::SovereignAccount`:
+  - Execute call as the sending account
+  - Preserves signature/permissions
+  - Required for signed extrinsics
+- `None` (weight):
+  - No weight override
+  - Use runtime's weight calculation
+- `swap_tokens_call`:
+  - Raw SCALE-encoded call data
+
+Alternative OriginKinds:
+- `Xcm`: Execute as XCM Virtual Machine
+- `Native`: Execute as relay chain account
+- `Superuser`: Execute as root (requires permissions)
+
+4.8 EXECUTING THE XCM
+----------------------
+
+```rust
+// Version the message
+let versioned_message = VersionedXcm::V5(swap_message);
+
+// Calculate weight
+let weight = self.env()
+    .xcm_weigh(&versioned_message)
+    .map_err(|_| Error::SwapFailed)?;
+
+// Execute locally
+self.env()
+    .xcm_execute(&versioned_message, weight)
+    .map_err(|_| Error::SwapFailed)?;
+```
+
+Why `xcm_execute` not `xcm_send`?
+- This XCM executes LOCALLY (same chain)
+- No cross-chain message needed
+- Faster and cheaper than xcm_send
+- Still uses XCM for standardized interface
+
+4.9 USING THE CONTRACT
+-----------------------
+
+A. Build and Deploy:
+```bash
+cd swap_pas_for_usdc
+pop build --release
+pop up -u wss://testnet-passet-hub.polkadot.io --use-wallet
+```
+
+B. Deposit PAS:
+```bash
+pop call contract \
+  -p ./swap_pas_for_usdc \
+  -u wss://testnet-passet-hub.polkadot.io \
+  --contract 0x4ea5394ad19589052f7803f45ae4caa3041485b9 \
+  --message deposit \
+  --value 2000000000000 \  # 2 PAS
+  --use-wallet \
+  -x
+```
+
+C. Check Balance:
+```bash
+pop call contract \
+  -p ./swap_pas_for_usdc \
+  -u wss://testnet-passet-hub.polkadot.io \
+  --contract 0x4ea5394ad19589052f7803f45ae4caa3041485b9 \
+  --message get_balance \
+  --use-wallet
+```
+
+D. Execute Swap:
+```bash
+pop call contract \
+  -p ./swap_pas_for_usdc \
+  -u wss://testnet-passet-hub.polkadot.io \
+  --contract 0x4ea5394ad19589052f7803f45ae4caa3041485b9 \
+  --message swap_pas_to_usdc \
+  --args 1000000000000 100000000 <RECEIVER_ACCOUNT_ID> \
+  --use-wallet \
+  -x
+
+# Args:
+# - 1000000000000 = 1 PAS (max to spend)
+# - 100000000 = 0.1 USDC (min to receive)
+# - <RECEIVER_ACCOUNT_ID> = 32-byte AccountId who receives USDC
+```
+
+E. Verify USDC Receipt:
+- Check receiver's balance in pallet-assets
+- Asset ID 1337 should show USDC balance
+- On PolkadotJS: Developer -> Chain State -> assets.account(1337, receiver)
+
+4.10 REAL TRANSACTION EXAMPLE
+------------------------------
+**Successful swap transaction**:
+https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Ftestnet-passet-hub.polkadot.io#/explorer/query/0x8200ac3a22b0f628df1d181abb6a57d9b1e48736e544ee8d36397ecef5ee7617
+
+Observe in the transaction:
+- AssetConversion.swap_tokens_for_exact_tokens call
+- Asset balances changing
+- Events: SwapExecuted, AssetIssued
+- Fee calculations
+
+4.11 COMMON ISSUES
+------------------
+
+**"SwapFailed" Error**:
+- Causes: Slippage too tight, insufficient liquidity, wrong asset IDs
+- Solution: Increase slippage tolerance (lower min_usdc_out)
+- Debug: Check DEX liquidity for PAS/USDC pair
+
+**Wrong Asset Received**:
+- Cause: Incorrect USDC_ASSET_ID or ASSETS_PALLET_INSTANCE
+- Solution: Verify runtime indices match your constants
+- Find correct values: Check runtime metadata or pallet configuration
+
+**"InsufficientBalance" (USDC not PAS)**:
+- Cause: Trying to swap more than available
+- Solution: Query DEX reserves, adjust amounts
+- Note: This is different from contract PAS balance
+
+**Call Encoding Issues**:
+- Symptom: Transaction succeeds but swap doesn't happen
+- Cause: Wrong pallet/call indices or parameter encoding
+- Solution: Double-check runtime version and call signatures
+- Tool: Use subxt or metadata inspection to verify indices
+
+4.12 EXTENDING THE PATTERN
+---------------------------
+
+This same Transact pattern can call ANY pallet:
+
+**Example: Call pallet-balances**:
+```rust
+const BALANCES_PALLET: u8 = 10;
+const TRANSFER_KEEP_ALIVE: u8 = 3;
+
+let mut transfer_call = Vec::new();
+transfer_call.push(BALANCES_PALLET);
+transfer_call.push(TRANSFER_KEEP_ALIVE);
+transfer_call.extend_from_slice(&dest.encode());
+transfer_call.extend_from_slice(&amount.encode());
+
+// Use in Transact instruction...
+```
+
+**Example: Call pallet-staking**:
+```rust
+const STAKING_PALLET: u8 = 7;
+const BOND: u8 = 0;
+
+let mut bond_call = Vec::new();
+bond_call.push(STAKING_PALLET);
+bond_call.push(BOND);
+bond_call.extend_from_slice(&value.encode());
+bond_call.extend_from_slice(&payee.encode());
+
+// Use in Transact instruction...
+```
+
+Key: Always verify pallet/call indices for your target runtime version!
+
+===========================================
+5. EXAMPLE 3: CROSS-CHAIN IDENTITY MANAGEMENT
+===========================================
+
+5.1 CONTRACT OVERVIEW
+---------------------
+**Contract**: people_chain_identity
+**Address**: 0xa4ea82aff295e3d48e1edc8484707a03edff5681
+**Purpose**: Set identity on People Chain from PassetHub
+
+This contract demonstrates the MOST COMPLEX XCM pattern:
+- Multi-step cross-chain flow
+- Sovereign account management
+- Remote Transact execution
+- Custom SCALE encoding for runtime types
+
+5.2 WHY THIS IS ADVANCED
+-------------------------
+Unlike previous examples, this contract:
+1. Operates across TWO chains (PassetHub → People Chain)
+2. Uses `xcm_send` not `xcm_execute` (remote execution)
+3. Manages a sovereign account on destination chain
+4. Implements custom encoding for People Chain types
+5. Requires two separate function calls (teleport, then transact)
+
+This pattern is essential for:
+- Cross-chain governance
+- Remote pallet interactions
+- Multi-chain DApps
+- Sovereign account management
+
+5.3 CONTRACT CODE ANALYSIS
+---------------------------
+
+Key Constants:
+```rust
+const PEOPLE_CHAIN_PARA_ID: u32 = 1004;    // People Chain
+const PASSET_HUB_PARA_ID: u32 = 1111;      // PassetHub (our chain)
+const IDENTITY_PALLET_INDEX: u8 = 50;      // pallet-identity on People Chain
+const SET_IDENTITY_CALL_INDEX: u8 = 1;     // setIdentity function
+```
+
+Storage:
+```rust
+#[ink(storage)]
+pub struct PeopleChainIdentity {
+    owner: Address,
+}
+```
+
+Custom Types (Important!):
+```rust
+pub enum Data {
+    None,
+    Raw(BoundedVec<u8, ConstU32<32>>),
+    BlakeTwo256([u8; 32]),
+    Sha256([u8; 32]),
+    Keccak256([u8; 32]),
+    ShaThree256([u8; 32]),
+}
+
+pub struct IdentityInfo {
+    pub display: Data,
+    pub legal: Data,
+    pub web: Data,
+    pub matrix: Data,
+    pub email: Data,
+    pub pgp_fingerprint: Option<[u8; 20]>,
+    pub image: Data,
+    pub twitter: Data,
+    pub github: Data,
+    pub discord: Data,
+}
+```
+
+Why custom types?
+- Must match People Chain's pallet_identity types EXACTLY
+- SCALE encoding must be compatible
+- Can't use Substrate types directly in ink! (no_std)
+- Custom Encode/Decode implementations required
+
+5.4 SOVEREIGN ACCOUNT COMPUTATION
+----------------------------------
+
+A **sovereign account** is a deterministic account that represents one chain
+on another chain. It's crucial for cross-chain operations.
+
+```rust
+pub(crate) fn people_chain_account(para_id: u32, account_id: AccountId) -> AccountId {
+    let location = (
+        b"SiblingChain",              // Sibling (another parachain)
+        Compact::<u32>::from(para_id), // Our ParaID (1111)
+        (b"AccountId32", account_id.0).encode(), // Our specific account
+    ).encode();
+
+    let output = blake2_256(&location);
+    AccountId::from(output)
+}
+```
+
+Calculation Steps:
+1. Encode tuple: ("SiblingChain", 1111, ("AccountId32", contract_account))
+2. Hash with BLAKE2-256
+3. Result is 32-byte AccountId on People Chain
+
+Why This Works:
+- Deterministic: Same inputs always produce same account
+- Unique: Different contracts get different accounts
+- Verifiable: People Chain can derive this using same algorithm
+- Standard: Used across Polkadot ecosystem
+
+Getting Sovereign Account:
+```rust
+#[ink(message)]
+pub fn get_people_chain_account(&self) -> AccountId {
+    let contract_account = self.env().account_id();
+    people_chain_account(PASSET_HUB_PARA_ID, contract_account)
+}
+```
+
+This is **critical** - you need this account address to:
+- Check balance on People Chain
+- Verify identity was set
+- Send funds to sovereign account
+
+5.5 STEP 1: TELEPORT FUNDS
+---------------------------
+
+Before setting identity, the contract's sovereign account on People Chain
+needs funds to pay transaction fees.
+
+```rust
+#[ink(message)]
+pub fn teleport_to_people_chain(&mut self, amount: ContractBalance) -> Result<()> {
+    // Check contract has sufficient balance
+    let contract_balance = self.env().balance();
+    let amount_u256: U256 = amount.into();
+    if contract_balance < amount_u256 {
+        return Err(Error::InsufficientBalance);
+    }
+
+    // Get sovereign account on People Chain
+    let contract_account = self.env().account_id();
+    let people_account = people_chain_account(PASSET_HUB_PARA_ID, contract_account);
+
+    // Build destination (People Chain)
+    let destination = Location::new(
+        1,                                 // Parent (relay chain)
+        [Parachain(PEOPLE_CHAIN_PARA_ID)] // People Chain parachain
+    );
+
+    // Build beneficiary (our sovereign account)
+    let beneficiary: Location = AccountId32 {
+        network: None,
+        id: people_account.0,  // IMPORTANT: Send to SOVEREIGN account
+    }.into();
+
+    // Build XCM message
+    let message: Xcm<()> = Xcm::builder_unsafe()
+        .withdraw_asset((Parent, amount))
+        .initiate_teleport(
+            All,
+            destination.clone(),
+            Xcm::builder_unsafe()
+                .buy_execution((Parent, amount / 10), Unlimited)
+                .deposit_asset(All, beneficiary)  // Deposit to sovereign account
+                .build()
+        )
+        .build();
+
+    // Execute locally
+    let weight = self.env()
+        .xcm_weigh(&VersionedXcm::V5(message.clone()))
+        .map_err(|_| Error::XcmExecuteFailed)?;
+
+    self.env()
+        .xcm_execute(&VersionedXcm::V5(message), weight)
+        .map_err(|_| Error::XcmExecuteFailed)?;
+
+    Ok(())
+}
+```
+
+Key Difference from Example 1:
+- Beneficiary is NOT user-specified
+- Beneficiary is SOVEREIGN ACCOUNT
+- This funds the contract's account on People Chain
+- Needed before calling set_identity_on_people()
+
+5.6 STEP 2: SET IDENTITY VIA REMOTE TRANSACT
+---------------------------------------------
+
+After sovereign account has funds, set identity remotely:
+
+```rust
+#[ink(message)]
+pub fn set_identity_on_people(
+    &mut self,
+    amount: ContractBalance,  // Amount to use for fees (from sovereign account)
+    display: String,          // Display name
+    email: String,            // Email address
+) -> Result<()> {
+    let display_bytes = display.into_bytes();
+    let email_bytes = email.into_bytes();
+
+    let contract_account = self.env().account_id();
+    let people_account = people_chain_account(PASSET_HUB_PARA_ID, contract_account);
+
+    // Build identity info
+    let identity_info = build_identity_info(display_bytes, email_bytes);
+
+    // Encode setIdentity call
+    let mut set_identity_call = Vec::new();
+    set_identity_call.push(IDENTITY_PALLET_INDEX);  // Pallet index: 50
+    set_identity_call.push(SET_IDENTITY_CALL_INDEX); // Call index: 1
+    set_identity_call.extend_from_slice(&identity_info.encode()); // IdentityInfo
+
+    // Destination: People Chain
+    let destination = Location::new(
+        1,
+        [Parachain(PEOPLE_CHAIN_PARA_ID)]
+    );
+
+    // Beneficiary: sovereign account (for refunds)
+    let beneficiary: Location = AccountId32 {
+        network: None,
+        id: people_account.0,
+    }.into();
+
+    // Build XCM message to send to People Chain
+    let identity_message: Xcm<()> = Xcm::builder_unsafe()
+        // Withdraw from sovereign account (funds we teleported earlier)
+        .withdraw_asset((Parent, amount))
+        // Buy execution on People Chain
+        .buy_execution((Parent, amount / 10), Unlimited)
+        // Execute the setIdentity call
+        .transact(
+            OriginKind::SovereignAccount,  // Execute as our sovereign account
+            None,                           // No weight override
+            set_identity_call               // Encoded setIdentity call
+        )
+        // Refund unused fees
+        .refund_surplus()
+        // Deposit remaining assets back to sovereign account
+        .deposit_asset(AllCounted(1), beneficiary)
+        .build();
+
+    // SEND (not execute!) - this is cross-chain
+    self.env()
+        .xcm_send(
+            &VersionedLocation::V5(destination),
+            &VersionedXcm::V5(identity_message)
+        )
+        .map_err(|_| Error::XcmSendFailed)?;
+
+    // Emit event
+    self.env().emit_event(IdentitySet {
+        people_chain_account: people_account.0,
+        amount_teleported: amount,
+    });
+
+    Ok(())
+}
+```
+
+5.7 XCM MESSAGE BREAKDOWN
+--------------------------
+
+Let's analyze the identity XCM message instruction by instruction:
+
+```rust
+Xcm::builder_unsafe()
+    .withdraw_asset((Parent, amount))
+```
+- Executed ON People Chain
+- Withdraws from our sovereign account
+- Puts assets in holding register
+- Required before buy_execution
+
+```rust
+    .buy_execution((Parent, amount / 10), Unlimited)
+```
+- Pays for XCM execution on People Chain
+- Uses 10% of withdrawn amount
+- `Unlimited`: No weight limit (trust ourselves)
+- Remaining amount stays in holding for refund
+
+```rust
+    .transact(
+        OriginKind::SovereignAccount,
+        None,
+        set_identity_call
+    )
+```
+- Executes the setIdentity runtime call
+- `SovereignAccount`: Call executes as our sovereign account
+- This is WHY we needed funds in sovereign account
+- People Chain sees this as signed call from sovereign account
+
+```rust
+    .refund_surplus()
+```
+- Takes unused weight/fees
+- Puts them back in holding register
+- Important: Prevents wasting funds
+
+```rust
+    .deposit_asset(AllCounted(1), beneficiary)
+```
+- Deposits ALL assets from holding (original + refund)
+- Back to our sovereign account
+- Ready for next operation
+
+```rust
+    .build();
+```
+- Constructs the final Xcm<()> message
+
+5.8 WHY TWO SEPARATE FUNCTIONS?
+--------------------------------
+
+**Design Choice**: teleport_to_people_chain() and set_identity_on_people()
+are separate calls, not combined.
+
+Advantages:
+1. **Flexibility**: Teleport once, do multiple operations
+2. **Gas Efficiency**: Don't re-teleport for each identity update
+3. **Error Handling**: Can retry identity setting without re-teleporting
+4. **Debugging**: Easier to identify which step failed
+5. **Composability**: Other contracts can use sovereign account funds
+
+Disadvantages:
+1. **Two Transactions**: User must call twice
+2. **Timing**: Must wait for teleport to finalize
+3. **Complexity**: Users must understand two-step flow
+
+In Production:
+- Consider combining if one-time operation
+- Keep separate for repeated operations
+- Document clearly for users
+
+5.9 CUSTOM SCALE ENCODING
+--------------------------
+
+The Data enum requires custom SCALE encoding to match People Chain:
+
+```rust
+impl Encode for Data {
+    fn encode(&self) -> Vec<u8> {
+        match self {
+            Data::None => vec![0u8; 1],  // Single 0x00 byte
+            Data::Raw(x) => {
+                let l = x.len().min(32);
+                let mut r = vec![l as u8 + 1; l + 1]; // Length + 1, then data
+                r[1..].copy_from_slice(&x[..l as usize]);
+                r
+            }
+            Data::BlakeTwo256(h) => once(34u8).chain(h.iter().cloned()).collect(),
+            Data::Sha256(h) => once(35u8).chain(h.iter().cloned()).collect(),
+            Data::Keccak256(h) => once(36u8).chain(h.iter().cloned()).collect(),
+            Data::ShaThree256(h) => once(37u8).chain(h.iter().cloned()).collect(),
+        }
+    }
+}
+```
+
+Encoding Rules:
+- `Data::None` → `0x00`
+- `Data::Raw(vec![0x41, 0x42, 0x43])` → `0x04` + `0x414243` (length+1, then data)
+- `Data::BlakeTwo256([...])` → `0x22` + 32 bytes
+- Other hashes use their respective discriminants
+
+Why This Matters:
+- Wrong encoding = Identity pallet rejects call
+- Must match exactly what pallet_identity expects
+- Test encoding with actual pallet before deploying
+
+Helper Function:
+```rust
+pub(crate) fn build_identity_info(display: Vec<u8>, email: Vec<u8>) -> IdentityInfo {
+    IdentityInfo {
+        display: if display.is_empty() {
+            Data::None
+        } else {
+            Data::Raw(BoundedVec::try_from(display).unwrap())
+        },
+        email: if email.is_empty() {
+            Data::None
+        } else {
+            Data::Raw(BoundedVec::try_from(email).unwrap())
+        },
+        // All other fields set to Data::None
+        legal: Data::None,
+        web: Data::None,
+        matrix: Data::None,
+        pgp_fingerprint: None,
+        image: Data::None,
+        twitter: Data::None,
+        github: Data::None,
+        discord: Data::None,
+    }
+}
+```
+
+5.10 USING THE CONTRACT
+------------------------
+
+Complete Workflow:
+
+A. Build and Deploy:
+```bash
+cd people_chain_identity
+pop build --release
+pop up -u wss://testnet-passet-hub.polkadot.io --use-wallet
+```
+
+B. Deposit PAS into Contract:
+```bash
+pop call contract \
+  -p ./people_chain_identity \
+  -u wss://testnet-passet-hub.polkadot.io \
+  --contract 0xa4ea82aff295e3d48e1edc8484707a03edff5681 \
+  --message deposit \
+  --value 5000000000000 \  # 5 PAS for operations + fees
+  --use-wallet \
+  -x
+```
+
+C. Get Sovereign Account Address:
+```bash
+pop call contract \
+  -p ./people_chain_identity \
+  -u wss://testnet-passet-hub.polkadot.io \
+  --contract 0xa4ea82aff295e3d48e1edc8484707a03edff5681 \
+  --message get_people_chain_account \
+  --use-wallet
+
+# Example output: 0x1a2b3c4d...  (32-byte AccountId)
+# Save this - you'll need it to verify on People Chain
+```
+
+D. Teleport Funds to People Chain:
+```bash
+pop call contract \
+  -p ./people_chain_identity \
+  -u wss://testnet-passet-hub.polkadot.io \
+  --contract 0xa4ea82aff295e3d48e1edc8484707a03edff5681 \
+  --message teleport_to_people_chain \
+  --args 2000000000000 \  # 2 PAS to sovereign account
+  --use-wallet \
+  -x
+
+# Wait 1-2 blocks for teleport to finalize
+```
+
+E. Verify Funds on People Chain:
+```bash
+# Connect to People Chain
+# RPC: wss://sys.ibp.network/people-paseo
+# Check balance of sovereign account (from step C)
+```
+
+F. Set Identity:
+```bash
+pop call contract \
+  -p ./people_chain_identity \
+  -u wss://testnet-passet-hub.polkadot.io \
+  --contract 0xa4ea82aff295e3d48e1edc8484707a03edff5681 \
+  --message set_identity_on_people \
+  --args 1000000000000 "Alice Smith" "alice@example.com" \
+  --use-wallet \
+  -x
+
+# Args:
+# - 1000000000000 = 1 PAS for fees (uses sovereign account funds)
+# - "Alice Smith" = Display name
+# - "alice@example.com" = Email
+```
+
+G. Verify Identity on People Chain:
+```bash
+# Connect to People Chain
+# Developer -> Chain State -> identity.identityOf(sovereign_account)
+# Should show identity with display name and email
+```
+
+5.11 REAL TRANSACTION EXAMPLES
+-------------------------------
+
+**Teleport Transaction on PassetHub**:
+https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Ftestnet-passet-hub.polkadot.io#/explorer/query/0x278983ad68f56ad276b70955e5366050d47775dd5da98df2eaa12489e6eb5e60
+
+**Identity Set on People Chain**:
+https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Fsys.ibp.network%2Fpeople-paseo#/explorer/query/0x75858e2371cfc261a9f16dae728bb76b990b3feaa31e9bd10950df6c11593ec3
+
+Study these to see:
+- XCM message structure for remote Transact
+- Identity pallet call encoding
+- Event emissions on both chains
+- Fee deductions and refunds
+
+5.12 COMMON ISSUES
+------------------
+
+**"InsufficientBalance" on Step 2**:
+- Cause: Sovereign account doesn't have funds on People Chain
+- Solution: Call teleport_to_people_chain() first
+- Verify: Check sovereign account balance on People Chain
+
+**Identity Not Set**:
+- Cause: Encoding mismatch, wrong pallet/call indices
+- Debug: Check People Chain runtime version
+- Verify: Identity pallet at index 50, setIdentity at index 1
+- Test: Try with subxt or direct runtime call first
+
+**"XcmSendFailed" Error**:
+- Cause: XCM message rejected before sending
+- Check: Message syntax, destination validity
+- Solution: Verify Location is correct for People Chain
+
+**Funds Stuck in Sovereign Account**:
+- This is by design! Sovereign account persists
+- Can be used for multiple operations
+- Remaining funds stay there for future calls
+- To withdraw: Need reverse XCM (People Chain → PassetHub)
+
+5.13 EXTENDING THE PATTERN
+---------------------------
+
+This sovereign account + remote Transact pattern applies to ANY cross-chain
+pallet interaction:
+
+**Example: Remote Staking**:
+```rust
+// 1. Teleport to relay chain
+// 2. Use Transact to call staking.bond()
+// Contract becomes validator via sovereign account
+```
+
+**Example: Remote Governance**:
+```rust
+// 1. Teleport to governance parachain
+// 2. Use Transact to call governance.vote()
+// Contract votes via sovereign account
+```
+
+**Example: Cross-Chain NFT Minting**:
+```rust
+// 1. Teleport to NFT parachain
+// 2. Use Transact to call nfts.mint()
+// Contract mints NFTs on another chain
+```
+
+Key: Always verify pallet structure on destination chain!
+
+===========================================
+6. COMMON PATTERNS & BEST PRACTICES
+===========================================
+
+6.1 PATTERN SUMMARY
+-------------------
+
+From the three examples, we've seen these core XCM patterns in ink!:
+
+**Pattern 1: Simple Teleport**
+- Use: Move assets between trusted chains
+- When: One-way asset transfer
+- Instructions: withdraw_asset, initiate_teleport
+- Execution: Local (xcm_execute)
+- Example: people_chain_teleport
+
+**Pattern 2: Local Transact**
+- Use: Call runtime pallets on same chain
+- When: Access DEX, governance, or other pallets
+- Instructions: transact
+- Execution: Local (xcm_execute)
+- Example: swap_pas_for_usdc
+
+**Pattern 3: Remote Transact**
+- Use: Call runtime pallets on different chain
+- When: Cross-chain operations, sovereign account management
+- Instructions: withdraw_asset, buy_execution, transact, refund_surplus
+- Execution: Remote (xcm_send)
+- Example: people_chain_identity
+
+**Pattern 4: Multi-Step Flow**
+- Use: Complex cross-chain operations
+- When: Need to fund sovereign account first
+- Steps: Teleport → Wait → Transact
+- Execution: Multiple calls
+- Example: people_chain_identity (full workflow)
+
+6.2 WHEN TO USE EACH PATTERN
+-----------------------------
+
+| Pattern | Use Case | Chains | Complexity | Gas Cost |
+|---------|----------|--------|------------|----------|
+| Simple Teleport | Asset transfer | Trusted chains | Low | Low |
+| Local Transact | Same-chain pallet | Single chain | Medium | Medium |
+| Remote Transact | Cross-chain pallet | Any chains | High | High |
+| Multi-Step Flow | Complex operation | Multiple chains | Very High | Very High |
+
+Choose based on:
+- **Trust relationship**: Teleport only for trusted chains
+- **Complexity**: Start simple, add complexity as needed
+- **Gas budget**: Remote operations cost more
+- **Latency**: Remote operations slower (cross-chain messaging)
+
+6.3 BEST PRACTICES
+------------------
+
+A. **Safety First**:
+```rust
+// ✅ GOOD: Check balance before operations
+let contract_balance = self.env().balance();
+let amount_u256: U256 = amount.into();
+if contract_balance < amount_u256 {
+    return Err(Error::InsufficientBalance);
+}
+
+// ❌ BAD: No balance check
+let message = Xcm::builder_unsafe()
+    .withdraw_asset((Parent, amount))  // Might fail!
+    // ...
+```
+
+B. **Proper Error Handling**:
+```rust
+// ✅ GOOD: Specific error types
+pub enum Error {
+    XcmExecuteFailed,
+    XcmSendFailed,
+    InsufficientBalance,
+    SwapFailed,
+}
+
+// ❌ BAD: Generic errors
+pub enum Error {
+    Failed,  // What failed?
+}
+```
+
+C. **Event Emission**:
+```rust
+// ✅ GOOD: Emit events for tracking
+self.env().emit_event(TeleportInitiated {
+    to: beneficiary,
+    amount,
+});
+
+// ❌ BAD: No events
+// (Can't track operations)
+```
+
+D. **Gas Estimation**:
+```rust
+// ✅ GOOD: Weigh before executing
+let weight = self.env()
+    .xcm_weigh(&versioned_message)
+    .map_err(|_| Error::XcmExecuteFailed)?;
+
+self.env()
+    .xcm_execute(&versioned_message, weight)?;
+
+// ❌ BAD: Arbitrary weight
+self.env()
+    .xcm_execute(&versioned_message, Weight::from_parts(1_000_000_000, 0))?;
+```
+
+E. **Type Conversions**:
+```rust
+// ✅ GOOD: Safe conversion with error handling
+let amount: u128 = self
+    .env()
+    .transferred_value()
+    .try_into()
+    .map_err(|_| Error::BalanceConversionFailed)?;
+
+// ❌ BAD: Unwrap (can panic!)
+let amount: u128 = self.env().transferred_value().try_into().unwrap();
+```
+
+F. **Access Control** (Production):
+```rust
+// ✅ GOOD: Restrict dangerous operations
+#[ink(message)]
+pub fn teleport(&mut self, to: AccountId, amount: u128) -> Result<()> {
+    let caller = self.env().caller();
+    if caller != self.owner {
+        return Err(Error::Unauthorized);
+    }
+    // ... teleport logic
+}
+
+// ❌ BAD: No access control (like our examples!)
+#[ink(message)]
+pub fn teleport(&mut self, to: AccountId, amount: u128) -> Result<()> {
+    // Anyone can drain contract!
+}
+```
+
+G. **Documentation**:
+```rust
+// ✅ GOOD: Document XCM operations clearly
+/// Teleports funds to an account on the People Chain (parachain 1004)
+///
+/// # Arguments
+/// * `to` - The destination AccountId (32-byte account ID)
+/// * `amount` - The amount to teleport (in native tokens, u128)
+///
+/// # Errors
+/// * `InsufficientBalance` - Contract lacks sufficient funds
+/// * `XcmExecuteFailed` - XCM execution failed
+///
+/// # XCM Flow
+/// 1. Withdraws assets from contract account
+/// 2. Burns assets locally via initiate_teleport
+/// 3. Sends XCM to People Chain to mint and deposit
+#[ink(message)]
+pub fn teleport(&mut self, to: AccountId, amount: u128) -> Result<()>
+
+// ❌ BAD: No documentation
+#[ink(message)]
+pub fn teleport(&mut self, to: AccountId, amount: u128) -> Result<()>
+```
+
+H. **Testing**:
+```rust
+// ✅ GOOD: Test XCM operations
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[ink::test]
+    fn test_teleport_insufficient_balance() {
+        let mut contract = PeopleChainTeleport::new();
+        let recipient = AccountId::from([0x01; 32]);
+        let result = contract.teleport(recipient, 1000);
+        assert_eq!(result, Err(Error::InsufficientBalance));
+    }
+
+    #[ink::test]
+    fn test_sovereign_account_computation() {
+        let contract_account = AccountId::from([0x01; 32]);
+        let sovereign = people_chain_account(1111, contract_account);
+        // Verify deterministic computation
+        let sovereign2 = people_chain_account(1111, contract_account);
+        assert_eq!(sovereign, sovereign2);
+    }
+}
+```
+
+6.4 SECURITY CONSIDERATIONS
+----------------------------
+
+**Critical Security Issues in Example Contracts**:
+1. **No Access Control**: Anyone can call any function
+2. **No Rate Limiting**: Can be drained quickly
+3. **No Slippage Protection**: (except swap contract)
+4. **No Refund Mechanism**: If XCM fails, funds may be lost
+5. **No Pause Mechanism**: Can't stop contract in emergency
+
+**Production Requirements**:
+```rust
+#[ink(storage)]
+pub struct SecureContract {
+    owner: AccountId,
+    paused: bool,
+    allowed_callers: Mapping<AccountId, bool>,
+    nonce: u64,
+}
+
+impl SecureContract {
+    #[ink(message)]
+    pub fn teleport(&mut self, to: AccountId, amount: u128) -> Result<()> {
+        // 1. Check not paused
+        if self.paused {
+            return Err(Error::ContractPaused);
+        }
+
+        // 2. Check caller authorized
+        let caller = self.env().caller();
+        if !self.allowed_callers.get(&caller).unwrap_or(false) {
+            return Err(Error::Unauthorized);
+        }
+
+        // 3. Rate limiting (simplified)
+        self.nonce += 1;
+
+        // 4. Amount limits
+        if amount > MAX_TELEPORT_AMOUNT {
+            return Err(Error::AmountTooLarge);
+        }
+
+        // ... actual teleport logic
+    }
+}
+```
+
+**XCM-Specific Security**:
+- **Reentrancy**: XCM callbacks can call back into contract
+- **Gas Estimation**: Always use xcm_weigh(), never hardcode
+- **Destination Trust**: Only teleport to trusted chains
+- **Message Version**: Use latest stable XCM version (V5)
+- **Error Handling**: Always handle xcm_execute/xcm_send errors
+
+6.5 GAS OPTIMIZATION
+--------------------
+
+XCM operations can be expensive. Optimize:
+
+**A. Batch Operations**:
+```rust
+// ✅ GOOD: One XCM with multiple operations
+let message = Xcm::builder_unsafe()
+    .withdraw_asset((Parent, amount))
+    .transact(call1)
+    .transact(call2)  // Same message, multiple calls
+    .deposit_asset(All, beneficiary)
+    .build();
+
+// ❌ BAD: Multiple XCM messages
+self.env().xcm_execute(&message1, weight1)?;
+self.env().xcm_execute(&message2, weight2)?;  // Separate overhead
+```
+
+**B. Minimize Cross-Chain Hops**:
+```rust
+// ✅ GOOD: Direct path
+// PassetHub → People Chain (1 hop)
+
+// ❌ BAD: Unnecessary relay
+// PassetHub → Relay → People Chain (2 hops)
+```
+
+**C. Reuse Sovereign Accounts**:
+```rust
+// ✅ GOOD: Teleport once, use many times
+teleport_to_people_chain(5000);  // Large amount
+set_identity(...);               // Use teleported funds
+update_identity(...);            // Reuse funds
+// ...
+
+// ❌ BAD: Teleport every time
+teleport_to_people_chain(1000);
+set_identity(...);
+teleport_to_people_chain(1000);  // Wasteful!
+update_identity(...);
+```
+
+**D. Smart Execution Method**:
+```rust
+// For LOCAL operations:
+xcm_execute()  // Cheaper, synchronous
+
+// For REMOTE operations:
+xcm_send()  // Necessary, but more expensive
+```
+
+6.6 DEBUGGING TECHNIQUES
+------------------------
+
+XCM operations can fail silently. Debug effectively:
+
+**A. Use Events**:
+```rust
+#[ink(event)]
+pub struct XcmDebug {
+    #[ink(topic)]
+    operation: String,
+    amount: u128,
+    destination: [u8; 32],
+}
+
+self.env().emit_event(XcmDebug {
+    operation: "teleport_initiated".to_string(),
+    amount,
+    destination: to.0,
+});
+```
+
+**B. Test Weight Calculation**:
+```rust
+// Before executing, check weight
+let weight = self.env()
+    .xcm_weigh(&VersionedXcm::V5(message.clone()));
+
+match weight {
+    Ok(w) => {
+        // Log weight for analysis
+        self.env().emit_event(WeightCalculated { weight: w });
+    }
+    Err(e) => {
+        // Weight calculation failed - message likely invalid
+        return Err(Error::InvalidXcm);
+    }
+}
+```
+
+**C. Dry Run on Testnet**:
+```bash
+# Use --dry-run to test without executing
+pop call contract \
+  -p ./my_contract \
+  --message teleport \
+  --args <ACCOUNT> 1000 \
+  --dry-run  # Shows what WOULD happen
+```
+
+**D. Monitor Explorer**:
+- Watch transactions on both chains
+- Check event emissions
+- Verify balance changes
+- Inspect XCM message content
+
+**E. Common Failure Points**:
+1. **Insufficient balance**: Check before withdrawing
+2. **Wrong destination**: Verify Location encoding
+3. **Bad runtime call**: Check pallet/call indices
+4. **Weight too low**: Use xcm_weigh() always
+5. **SCALE encoding**: Verify types match exactly
+
+6.7 TESTING STRATEGIES
+-----------------------
+
+**Unit Tests (Contract Logic)**:
+```rust
+#[cfg(test)]
+mod tests {
+    #[ink::test]
+    fn test_deposit() {
+        let mut contract = MyContract::new();
+        // Mock payable call
+        ink::env::test::set_value_transferred::<ink::env::DefaultEnvironment>(1000);
+        assert!(contract.deposit().is_ok());
+        assert_eq!(contract.get_balance().unwrap(), 1000);
+    }
+
+    #[ink::test]
+    fn test_sovereign_account() {
+        let account = AccountId::from([0x01; 32]);
+        let sovereign = compute_sovereign(1111, account);
+        // Verify determinism
+        assert_eq!(sovereign, compute_sovereign(1111, account));
+    }
+}
+```
+
+**Integration Tests (XCM Flow)**:
+```rust
+#[ink::e2e_test]
+async fn test_teleport_e2e(mut client: Client<C, E>) -> E2EResult<()> {
+    // 1. Deploy contract
+    let constructor = ContractRef::new();
+    let contract = client
+        .instantiate("my_contract", &ink_e2e::alice(), &constructor)
+        .await?;
+
+    // 2. Deposit funds
+    let deposit = build_message::<ContractRef>(contract.account_id)
+        .call(|c| c.deposit())
+        .value(1000)
+        .gas_limit(Gas::from(100_000_000_000));
+
+    let _result = client
+        .call(&ink_e2e::alice(), &deposit)
+        .await?;
+
+    // 3. Attempt teleport
+    let teleport = build_message::<ContractRef>(contract.account_id)
+        .call(|c| c.teleport(bob_account(), 500));
+
+    let result = client
+        .call(&ink_e2e::alice(), &teleport)
+        .await?;
+
+    assert!(result.is_ok());
+
+    Ok(())
+}
+```
+
+**Testnet Verification**:
+1. Deploy to PassetHub testnet
+2. Fund with small amounts
+3. Test each function individually
+4. Verify on destination chains
+5. Monitor for 24 hours
+6. Check for edge cases
+
+===========================================
+7. DEVELOPMENT WORKFLOW WITH POP CLI
+===========================================
+
+7.1 PROJECT SETUP
+-----------------
+
+Create New XCM Contract:
+```bash
+# Create from template
+pop new contract my_xcm_contract
+
+cd my_xcm_contract
+
+# Add XCM dependencies to Cargo.toml
+```
+
+Required Dependencies:
+```toml
+[dependencies]
+ink = { version = "6.0", default-features = false }
+parity-scale-codec = { version = "3", default-features = false, features = ["derive"] }
+scale-info = { version = "2.6", default-features = false, features = ["derive"] }
+
+# XCM dependencies are built into ink! v6
+```
+
+7.2 BUILD PROCESS
+-----------------
+
+```bash
+# Standard build
+pop build
+
+# Release build (smaller, optimized)
+pop build --release
+
+# Verifiable build (for production)
+pop build --release --verifiable
+```
+
+Build Output:
+```
+target/ink/
+├── my_xcm_contract.contract  # Bundle with metadata
+├── my_xcm_contract.wasm       # Contract bytecode
+└── my_xcm_contract.json       # Metadata
+```
+
+7.3 LOCAL TESTING
+-----------------
+
+```bash
+# Run unit tests
+pop test
+
+# Run with debug output
+pop test --nocapture
+
+# Run specific test
+pop test test_teleport_logic
+```
+
+For E2E tests:
+```bash
+# Requires local node
+pop test --e2e
+
+# Or use specific node
+pop test --e2e --node ../my-local-node
+```
+
+7.4 DEPLOYMENT TO PASSET HUB
+-----------------------------
+
+A. Map Your Account (REQUIRED for pallet-revive):
+```bash
+pop call chain \
+  --pallet revive \
+  --function map_account \
+  -u wss://testnet-passet-hub.polkadot.io \
+  --use-wallet
+```
+
+This creates a mapping between your 32-byte Substrate account and 20-byte
+Ethereum-style address used by pallet-revive.
+
+B. Deploy Contract:
+```bash
+# Interactive mode (recommended for first time)
+pop up
+
+# Select options:
+# - Path: ./my_xcm_contract
+# - URL: wss://testnet-passet-hub.polkadot.io
+# - Constructor: new
+# - Sign: use wallet
+
+# Non-interactive mode
+pop up \
+  -p ./my_xcm_contract \
+  -u wss://testnet-passet-hub.polkadot.io \
+  --constructor new \
+  --use-wallet
+```
+
+C. Save Contract Address:
+Create a deployments.json file:
+```json
+{
+  "passet_hub_testnet": {
+    "address": "0x...",
+    "deployed_at": "2025-01-15T10:30:00Z",
+    "deployer": "5GrwvaEF..."
+  }
+}
+```
+
+7.5 INTERACTING WITH DEPLOYED CONTRACTS
+----------------------------------------
+
+Read-Only Calls (Queries):
+```bash
+pop call contract \
+  -p ./my_xcm_contract \
+  -u wss://testnet-passet-hub.polkadot.io \
+  --contract <ADDRESS> \
+  --message get_balance \
+  --use-wallet
+```
+
+State-Changing Calls (Transactions):
+```bash
+pop call contract \
+  -p ./my_xcm_contract \
+  -u wss://testnet-passet-hub.polkadot.io \
+  --contract <ADDRESS> \
+  --message teleport \
+  --args <ACCOUNT_ID> 1000000000000 \
+  --use-wallet \
+  -x  # REQUIRED for state changes
+```
+
+With Value (Payable Calls):
+```bash
+pop call contract \
+  -p ./my_xcm_contract \
+  -u wss://testnet-passet-hub.polkadot.io \
+  --contract <ADDRESS> \
+  --message deposit \
+  --value 5000000000000 \  # 5 PAS
+  --use-wallet \
+  -x
+```
+
+7.6 MONITORING & DEBUGGING
+---------------------------
+
+Check Transaction Status:
+```bash
+# Transaction hash returned by pop call
+# View in explorer:
+# https://polkadot.js.org/apps/?rpc=wss://testnet-passet-hub.polkadot.io#/explorer/query/<TX_HASH>
+```
+
+Watch Events:
+- Navigate to Developer → Events
+- Filter by contract address
+- Monitor for your custom events
+
+Check Contract State:
+```bash
+# Query storage directly
+pop call chain \
+  --pallet revive \
+  --function contract_info_of \
+  --args <CONTRACT_ADDRESS> \
+  -u wss://testnet-passet-hub.polkadot.io
+```
+
+7.7 UPGRADING CONTRACTS
+------------------------
+
+ink! v6 supports upgrade patterns:
+
+```rust
+// In contract
+#[ink(message)]
+pub fn set_code(&mut self, code_hash: [u8; 32]) -> Result<()> {
+    // Only owner can upgrade
+    if self.env().caller() != self.owner {
+        return Err(Error::Unauthorized);
+    }
+
+    self.env()
+        .set_code_hash(&code_hash)
+        .map_err(|_| Error::UpgradeFailed)?;
+
+    Ok(())
+}
+```
+
+Upgrade Process:
+1. Build new version
+2. Upload code (don't instantiate)
+3. Call set_code() on old contract
+4. Old address now uses new code
+
+7.8 BEST PRACTICES FOR DEVELOPMENT
+-----------------------------------
+
+**A. Version Control**:
+```
+.gitignore:
+target/
+*.contract
+*.wasm
+node_modules/
+
+git add:
+src/
+Cargo.toml
+.claude/
+README.md
+deployments.json
+```
+
+**B. Documentation**:
+- README.md with deployment instructions
+- Inline code comments for XCM logic
+- CHANGELOG.md for tracking versions
+- SECURITY.md for known issues
+
+**C. CI/CD**:
+```yaml
+# .github/workflows/test.yml
+name: Test
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Pop CLI
+        run: cargo install pop-cli
+      - name: Build
+        run: pop build
+      - name: Test
+        run: pop test
+```
+
+===========================================
+8. TROUBLESHOOTING
+===========================================
+
+8.1 COMPILATION ERRORS
+-----------------------
+
+**Error: "ink_xcm not found"**
+- Cause: Using ink! version < 6.0
+- Solution: Update Cargo.toml to ink! 6.0+
+```toml
+[dependencies]
+ink = { version = "6.0", default-features = false }
+```
+
+**Error: "Location not found in prelude"**
+- Cause: Wrong import path
+- Solution: Use ink::xcm::prelude::*
+```rust
+use ink::xcm::prelude::*;  // Correct
+```
+
+**Error: SCALE encoding trait bounds**
+- Cause: Custom types need Encode/Decode derives
+- Solution: Add derives and implementations
+```rust
+#[derive(Encode, Decode, scale_info::TypeInfo)]
+pub struct MyType { ... }
+```
+
+8.2 DEPLOYMENT ISSUES
+----------------------
+
+**Error: "Module error"**
+- Cause: pallet-revive not available on chain
+- Solution: Verify chain supports pallet-revive
+- PassetHub: ✅ Supported
+- Other chains: Check runtime
+
+**Error: "Account not mapped"**
+- Cause: Forgot to call map_account
+- Solution:
+```bash
+pop call chain \
+  --pallet revive \
+  --function map_account \
+  -u wss://testnet-passet-hub.polkadot.io \
+  --use-wallet
+```
+
+**Error: "Insufficient funds for deployment"**
+- Cause: Not enough PAS in account
+- Solution: Get testnet funds from faucet
+- Faucet: https://faucet.polkadot.io/paseo
+
+8.3 XCM EXECUTION ERRORS
+-------------------------
+
+**"XcmExecuteFailed"**
+- Cause: XCM message invalid or execution failed
+- Debug:
+  1. Check xcm_weigh() succeeds
+  2. Verify Location syntax
+  3. Check balance sufficient
+  4. Inspect message structure
+
+**"InsufficientBalance"**
+- Cause: Contract lacks funds for operation
+- Solution: Call deposit() or check balance first
+```bash
+# Check balance first
+pop call contract --message get_balance ...
+
+# Then deposit if needed
+pop call contract --message deposit --value 1000000000000 ...
+```
+
+**"XcmSendFailed"**
+- Cause: Remote XCM send rejected
+- Check:
+  1. Destination parachain exists
+  2. XCM channel open
+  3. Message too large
+  4. Rate limiting
+
+**XCM executes but no result**
+- Cause: Insufficient fees for remote execution
+- Solution: Increase buy_execution amount
+```rust
+// ❌ Too little
+.buy_execution((Parent, amount / 100), Unlimited)
+
+// ✅ More reasonable
+.buy_execution((Parent, amount / 10), Unlimited)
+```
+
+8.4 TRANSACT-SPECIFIC ISSUES
+-----------------------------
+
+**Call doesn't execute on destination**
+- Cause: Wrong pallet/call indices
+- Solution: Verify runtime metadata
+```bash
+# Check runtime metadata
+# https://polkadot.js.org/apps/?rpc=<RPC>#/chainstate/constants
+
+# People Chain example:
+# Identity pallet: index 50
+# setIdentity: index 1
+```
+
+**SCALE encoding error**
+- Cause: Parameters encoded incorrectly
+- Solution: Match exact runtime types
+- Use polkadot-js metadata to verify types
+- Test encoding with subxt or polkadot-js
+
+**"BadOrigin" error**
+- Cause: Wrong OriginKind for call
+- Solution:
+  - SovereignAccount: For signed calls
+  - Xcm: For unsigned/root calls
+  - Native: For relay chain origin
+
+8.5 CROSS-CHAIN ISSUES
+-----------------------
+
+**Teleport succeeds but funds not received**
+- Check:
+  1. Destination chain online?
+  2. Correct beneficiary account?
+  3. Sufficient fees for remote execution?
+  4. Check destination chain events
+
+**Sovereign account has no funds**
+- Cause: Teleport not finalized or failed
+- Solution:
+  1. Wait 2-3 blocks for finalization
+  2. Check PassetHub transaction succeeded
+  3. Verify destination received message
+  4. Re-run teleport if failed
+
+**Identity not set on People Chain**
+- Cause: Multiple possible issues
+- Debug checklist:
+  1. ✅ Sovereign account funded? (check on People Chain)
+  2. ✅ Correct pallet/call indices?
+  3. ✅ SCALE encoding correct?
+  4. ✅ Sufficient fees in buy_execution?
+  5. ✅ Identity data valid?
+
+8.6 COMMON MISTAKES
+--------------------
+
+**Mistake 1: Wrong account type**
+```rust
+// ❌ Wrong: Using Address instead of AccountId
+let beneficiary: Location = Address { ... }.into();  // Compile error
+
+// ✅ Correct: Using AccountId32
+let beneficiary: Location = AccountId32 {
+    network: None,
+    id: account.0
+}.into();
+```
+
+**Mistake 2: Forgetting -x flag**
+```bash
+# ❌ Wrong: No -x flag for state-changing call
+pop call contract --message teleport --args ...
+# Returns "Ok" but doesn't execute!
+
+# ✅ Correct: Include -x
+pop call contract --message teleport --args ... -x
+```
+
+**Mistake 3: Insufficient gas for buy_execution**
+```rust
+// ❌ Too little: Remote execution fails
+.buy_execution((Parent, 1000), Unlimited)
+
+// ✅ Reasonable: 10% of transferred amount
+.buy_execution((Parent, amount / 10), Unlimited)
+```
+
+**Mistake 4: Not checking result types**
+```rust
+// ❌ Ignoring result
+self.env().xcm_execute(&message, weight);
+
+// ✅ Handling errors
+self.env()
+    .xcm_execute(&message, weight)
+    .map_err(|_| Error::XcmExecuteFailed)?;
+```
+
+**Mistake 5: Hardcoding weight**
+```rust
+// ❌ Hardcoded weight
+let weight = Weight::from_parts(1_000_000_000, 0);
+
+// ✅ Calculate weight
+let weight = self.env()
+    .xcm_weigh(&versioned_message)
+    .map_err(|_| Error::XcmExecuteFailed)?;
+```
+
+===========================================
+9. ADVANCED TOPICS
+===========================================
+
+9.1 RESERVE TRANSFERS (vs Teleports)
+-------------------------------------
+
+Teleports only work between TRUSTED chains. For general chains, use reserve transfers.
+
+**Reserve Transfer Pattern**:
+```rust
+// Reserve transfer: Move assets via reserve chain
+let message: Xcm<()> = Xcm::builder_unsafe()
+    .withdraw_asset((Parent, amount))
+    .initiate_reserve_withdraw(
+        All,
+        destination,  // Where assets go
+        Xcm::builder_unsafe()
+            .buy_execution((Parent, amount / 10), Unlimited)
+            .deposit_asset(All, beneficiary)
+            .build()
+    )
+    .build();
+```
+
+Key Differences:
+- **Teleport**: Burn local, mint remote (trusted chains)
+- **Reserve**: Lock on reserve chain, mint wrapped on destination
+- **Trust**: Reserve works for any chain, teleport needs trust
+
+When to use:
+- Teleport: System parachains (Asset Hub ↔ People Chain)
+- Reserve: Non-system parachains, unknown trust level
+
+9.2 MULTI-HOP XCM
+------------------
+
+Send XCM through multiple chains:
+
+```rust
+// Example: PassetHub → Relay → Another Parachain → Final Destination
+let destination = Location::new(
+    1,  // Up to relay
+    [
+        Parachain(2000),  // First parachain
+        AccountId32 { ... }  // Final destination
+    ]
+);
+```
+
+Considerations:
+- Each hop adds latency
+- Each hop costs fees
+- More complex error handling
+- Use only when necessary
+
+9.3 CUSTOM XCVM PROGRAMS
+-------------------------
+
+XCM is Turing-complete. Write custom programs:
+
+```rust
+let complex_message: Xcm<()> = Xcm::builder_unsafe()
+    // Conditional execution
+    .withdraw_asset((Parent, amount))
+    .buy_execution((Parent, amount / 10), Unlimited)
+
+    // Try operation 1
+    .transact(OriginKind::SovereignAccount, None, call1)
+
+    // If fails, clear error and try operation 2
+    .clear_error()
+    .transact(OriginKind::SovereignAccount, None, call2)
+
+    // Always refund and deposit
+    .refund_surplus()
+    .deposit_asset(All, beneficiary)
+    .build();
+```
+
+Available Instructions:
+- `clear_error`: Reset error register
+- `query_holding`: Check holding register
+- `exchange_asset`: Swap assets
+- `claim_asset`: Claim trapped assets
+- `expect_error`: Assert error state
+- And many more...
+
+9.4 HANDLING XCM FAILURES
+--------------------------
+
+XCM can fail at multiple points:
+
+```rust
+#[ink(storage)]
+pub struct RobustContract {
+    pending_teleports: Mapping<u64, PendingTeleport>,
+    nonce: u64,
+}
+
+#[derive(Encode, Decode)]
+pub struct PendingTeleport {
+    beneficiary: AccountId,
+    amount: u128,
+    initiated_at: Timestamp,
+    status: TeleportStatus,
+}
+
+impl RobustContract {
+    #[ink(message)]
+    pub fn teleport_with_tracking(&mut self, to: AccountId, amount: u128) -> Result<u64> {
+        // Store pending teleport
+        let nonce = self.nonce;
+        self.pending_teleports.insert(nonce, &PendingTeleport {
+            beneficiary: to,
+            amount,
+            initiated_at: self.env().block_timestamp(),
+            status: TeleportStatus::Pending,
+        });
+        self.nonce += 1;
+
+        // Attempt teleport
+        let result = self.execute_teleport(to, amount);
+
+        // Update status
+        if result.is_ok() {
+            let mut pending = self.pending_teleports.get(nonce).unwrap();
+            pending.status = TeleportStatus::Sent;
+            self.pending_teleports.insert(nonce, &pending);
+        }
+
+        Ok(nonce)  // Return tracking ID
+    }
+
+    #[ink(message)]
+    pub fn retry_teleport(&mut self, nonce: u64) -> Result<()> {
+        // Retry failed teleport
+        let pending = self.pending_teleports.get(nonce)
+            .ok_or(Error::NotFound)?;
+
+        if pending.status != TeleportStatus::Failed {
+            return Err(Error::InvalidStatus);
+        }
+
+        self.execute_teleport(pending.beneficiary, pending.amount)?;
+
+        // Update status
+        let mut updated = pending;
+        updated.status = TeleportStatus::Sent;
+        self.pending_teleports.insert(nonce, &updated);
+
+        Ok(())
+    }
+}
+```
+
+9.5 QUERYING XCM STATE
+-----------------------
+
+Query state on remote chains:
+
+```rust
+// QueryResponse pattern (advanced)
+let query_message: Xcm<()> = Xcm::builder_unsafe()
+    .withdraw_asset((Parent, fee_amount))
+    .buy_execution((Parent, fee_amount), Unlimited)
+    .query_response(
+        query_id,
+        response,
+        max_weight,
+        here(),  // Where to send response
+    )
+    .build();
+
+// Send query
+self.env()
+    .xcm_send(&destination, &VersionedXcm::V5(query_message))
+    .map_err(|_| Error::XcmSendFailed)?;
+
+// Handle response in another message...
+```
+
+Use cases:
+- Check balance on remote chain
+- Query storage on remote chain
+- Verify execution results
+- Get runtime metadata
+
+9.6 ASSET CONVERSION & SWAPS
+-----------------------------
+
+More complex DEX patterns:
+
+```rust
+// Multi-hop swap: PAS → DOT → USDC
+let path: Vec<Location> = vec![
+    Parent.into(),  // PAS
+    Location::new(1, []),  // DOT (relay)
+    Location::new(0, [PalletInstance(50), GeneralIndex(1337)]),  // USDC
+];
+
+// Build swap call for path
+let swap_call = build_multi_hop_swap(path, amount_in, min_amount_out);
+
+// Execute via Transact
+let message = Xcm::builder_unsafe()
+    .transact(OriginKind::SovereignAccount, None, swap_call)
+    .build();
+```
+
+Advanced patterns:
+- Liquidity provision
+- Yield farming via XCM
+- Cross-chain arbitrage
+- Flash loans (with proper collateral)
+
+9.7 GOVERNANCE VIA XCM
+-----------------------
+
+Vote on remote chain governance:
+
+```rust
+// Example: Vote on People Chain referendum
+const REFERENDUM_PALLET: u8 = 14;
+const VOTE: u8 = 0;
+
+let vote_call = encode_vote(referendum_id, aye, conviction, amount);
+
+let governance_message: Xcm<()> = Xcm::builder_unsafe()
+    .withdraw_asset((Parent, fee))
+    .buy_execution((Parent, fee / 10), Unlimited)
+    .transact(OriginKind::SovereignAccount, None, vote_call)
+    .refund_surplus()
+    .deposit_asset(All, sovereign_account)
+    .build();
+
+self.env()
+    .xcm_send(&people_chain_location, &VersionedXcm::V5(governance_message))
+    .map_err(|_| Error::XcmSendFailed)?;
+```
+
+Use cases:
+- DAO voting across chains
+- Delegated governance
+- Proposal submission
+- Treasury spends
+
+9.8 NFT CROSS-CHAIN OPERATIONS
+-------------------------------
+
+Move NFTs between chains:
+
+```rust
+// NFT reserve transfer pattern
+let nft_location = Location::new(
+    0,
+    [
+        PalletInstance(NFTS_PALLET),
+        GeneralIndex(collection_id),
+        GeneralIndex(item_id),
+    ]
+);
+
+let message: Xcm<()> = Xcm::builder_unsafe()
+    .withdraw_asset((nft_location.clone(), 1))
+    .initiate_reserve_withdraw(
+        All,
+        destination_chain,
+        Xcm::builder_unsafe()
+            .buy_execution((Parent, fee), Unlimited)
+            .deposit_asset(All, beneficiary)
+            .build()
+    )
+    .build();
+```
+
+Considerations:
+- NFTs use reserve transfers (not teleports)
+- Metadata may not transfer
+- Verify both chains support pallet-nfts
+- Handle fractional NFTs carefully
+
+9.9 PRODUCTION CHECKLIST
+-------------------------
+
+Before deploying XCM contracts to mainnet:
+
+**Security**:
+- [ ] Access control on all functions
+- [ ] Rate limiting implemented
+- [ ] Pause mechanism available
+- [ ] Emergency withdrawal function
+- [ ] Reentrancy guards
+- [ ] Amount limits enforced
+- [ ] Third-party security audit completed
+
+**Functionality**:
+- [ ] All functions tested on testnet
+- [ ] XCM messages verified on explorer
+- [ ] Sovereign accounts funded and tested
+- [ ] Error handling comprehensive
+- [ ] Events emitted for all operations
+- [ ] Gas estimation accurate
+
+**Documentation**:
+- [ ] README with clear instructions
+- [ ] Inline code documentation
+- [ ] SECURITY.md with known issues
+- [ ] Deployment guide
+- [ ] Monitoring guide
+- [ ] Incident response plan
+
+**Infrastructure**:
+- [ ] Monitoring dashboard set up
+- [ ] Alert system configured
+- [ ] Backup plan for failures
+- [ ] Upgrade mechanism tested
+- [ ] Multi-sig for admin functions
+- [ ] Key management secure
+
+**Compliance**:
+- [ ] Legal review completed
+- [ ] Terms of service defined
+- [ ] Privacy policy if needed
+- [ ] Regulatory compliance checked
+- [ ] Insurance considered
+
+===========================================
+CONCLUSION
+===========================================
+
+This guide has covered comprehensive real-world XCM patterns in ink! v6:
+
+1. **Asset Teleporting**: Moving native assets between trusted chains
+2. **DEX Interactions**: Using XCM Transact for swaps
+3. **Identity Management**: Complex cross-chain operations with sovereign accounts
+
+Key Takeaways:
+- XCM in ink! v6 is powerful and flexible
+- Always use Pop CLI for development workflow
+- Test thoroughly on testnet before mainnet
+- Security and access control are critical
+- Understand trust relationships between chains
+
+Next Steps:
+1. Study the three example contracts in detail
+2. Deploy your own versions to PassetHub testnet
+3. Modify contracts for your use case
+4. Add proper access controls for production
+5. Get security audit before mainnet deployment
+
+Resources:
+- Example Contracts: https://github.com/r0gue-io/ink-xcm-examples
+- XCM Documentation: https://wiki.polkadot.network/docs/learn-xcm
+- ink! Documentation: https://use.ink
+- Pop CLI: https://learn.onpop.io
+- PassetHub Explorer: https://polkadot.js.org/apps/?rpc=wss://testnet-passet-hub.polkadot.io
+
+Remember: These examples are educational only. DO NOT use them in production
+without proper access controls, testing, and security audits!
+
+===========================================
+END OF XCM INK! PRACTICAL EXAMPLES GUIDE
+===========================================

@@ -3,6 +3,31 @@ POP CLI COMPREHENSIVE GUIDE
 Complete Reference for LLMs
 ===========================================
 
+TABLE OF CONTENTS
+=================
+1. SECURITY AND BEST PRACTICES
+   - Never Request Private Keys
+   - Contract Interaction Command Format
+   - Automatic Address Handling
+2. OVERVIEW
+3. INSTALLATION
+4. SMART CONTRACT DEVELOPMENT (ink!)
+   - Creating Contracts
+   - Building and Testing
+   - Deployment and Interaction
+5. APPCHAIN/PARACHAIN DEVELOPMENT
+   - Creating Parachains
+   - Building and Testing
+   - Deployment Strategies
+6. COMMON WORKFLOWS
+7. ADVANCED FEATURES
+8. TROUBLESHOOTING
+9. BEST PRACTICES
+10. REFERENCE
+11. APPENDIX: EXAMPLES
+
+===========================================
+
 This guide provides comprehensive documentation about Pop CLI, the all-in-one tool
 for Polkadot development. Pop CLI simplifies building, testing, and deploying both
 smart contracts (using ink!) and appchains on Polkadot.

@@ -3,6 +3,28 @@ INK! SMART CONTRACT TECHNICAL GUIDE
 Deep Technical Reference from Codebase Analysis
 ===========================================
 
+TABLE OF CONTENTS
+=================
+1. CORE ARCHITECTURE & COMPILATION
+   - Architecture Overview
+   - Dispatch Mechanism
+   - Storage Architecture
+2. COMPLETE CONTRACT ANATOMY
+   - Minimal Contract Structure
+   - Environment Access
+   - Types & Imports
+3. STORAGE COLLECTIONS IN DEPTH
+   - Mapping (Key-Value Store)
+   - Lazy (Single Value)
+   - StorageVec (Dynamic Array)
+4. EVENTS - COMPLETE GUIDE
+5. CROSS-CONTRACT CALLS
+6. TESTING FRAMEWORK
+7. ADVANCED PATTERNS
+8. XCM INTEGRATION
+
+===========================================
+
 This guide provides deep technical insights into ink! smart contract development,
 extracted from analyzing the ink! codebase itself. Use this alongside the main
 ink-llms.txt documentation for complete understanding.

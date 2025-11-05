@@ -222,6 +222,12 @@ pub struct ConvertAddressParams {
     prefix: Option<u16>,
 }
 
+#[derive(Deserialize, Serialize, JsonSchema)]
+pub struct GetEndpointsParams {
+    #[schemars(description = "Optional filter for network type (testnet, mainnet, local)")]
+    network_type: Option<String>,
+}
+
 // ============================================================================
 // Tool Implementations
 // ============================================================================
@@ -744,6 +750,63 @@ Note: Conversion from Ethereum to Substrate addresses is not reliably possible.
                 Ok(Self::success(fallback_script))
             }
         }
+    }
+
+    #[tool(description = "Get available Polkadot network endpoints (RPC URLs) for contract deployment and interaction")]
+    async fn get_endpoints(
+        &self,
+        Parameters(params): Parameters<GetEndpointsParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let endpoints = r#"
+🌐 POLKADOT NETWORK ENDPOINTS
+==============================
+
+TESTNET (RECOMMENDED FOR DEVELOPMENT)
+--------------------------------------
+PassetHub Testnet (ParaID 1111) ✅ DEFAULT
+- Network: PassetHub Testnet
+- RPC: wss://testnet-passet-hub.polkadot.io
+- Explorer: https://polkadot.js.org/apps/?rpc=wss%3A%2F%2Ftestnet-passet-hub.polkadot.io
+- Native Token: PAS (Paseo native token)
+- Use Case: ink! smart contract development, XCM testing, asset swaps
+- Status: Active and maintained
+
+⚠️ IMPORTANT: PassetHub is the ONLY network you should use for contract development and testing.
+All deployment, testing, and interaction commands MUST use this endpoint.
+
+Example deployment:
+```bash
+pop up --url wss://testnet-passet-hub.polkadot.io --use-wallet
+```
+
+Example contract call:
+```bash
+pop call contract --path . --url wss://testnet-passet-hub.polkadot.io \
+  --contract 0xYOUR_CONTRACT_ADDRESS \
+  --message your_method \
+  --use-wallet
+```
+
+LOCAL DEVELOPMENT
+-----------------
+For local testing with zombienet or dev nodes:
+- Local Node: ws://127.0.0.1:9944
+- Use Case: Testing before deploying to testnet
+
+MAINNET (PRODUCTION ONLY)
+--------------------------
+⚠️ DO NOT use mainnet unless explicitly requested by the user.
+Mainnet endpoints are not included here to prevent accidental production deployments.
+"#;
+
+        let filtered = match params.network_type.as_deref() {
+            Some("testnet") => "✅ Showing testnet endpoints only:\n\nPassetHub Testnet: wss://testnet-passet-hub.polkadot.io",
+            Some("local") => "🔧 Local development endpoint:\n\nLocal Node: ws://127.0.0.1:9944",
+            Some("mainnet") => "⚠️ Mainnet endpoints are not provided by default. If you need production endpoints, please ensure you have explicit user approval.",
+            _ => endpoints,
+        };
+
+        Ok(Self::success(filtered))
     }
 }
 

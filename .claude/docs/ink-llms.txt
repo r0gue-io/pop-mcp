@@ -3,7 +3,27 @@ INK! COMPREHENSIVE DOCUMENTATION
 Smart Contract Development on Polkadot
 ===========================================
 
-🌐 RECOMMENDED TESTNET: PassetHub
+TABLE OF CONTENTS
+=================
+1. RECOMMENDED TESTNET: PassetHub
+2. RELATED DOCUMENTATION
+3. QUICK START
+4. BACKGROUND CONCEPTS
+   - Smart Contracts vs. Polkadot Parachains
+   - ink! vs. CosmWasm
+   - ink! vs. Solidity
+5. DEVELOPMENT WORKFLOW
+   - Dependencies and Environment Setup
+   - Compile and Test
+   - Deploy and Interact
+6. CONVERTING SOLIDITY TO INK!
+   - Step-by-step conversion guide
+   - Syntax equivalencies
+7. BEST PRACTICES AND TIPS
+
+===========================================
+
+🌐 1. RECOMMENDED TESTNET: PassetHub
 ==================================
 **Default Network for ALL Development:**
 - Network: PassetHub Testnet (ParaID 1111)
@@ -14,13 +34,15 @@ Smart Contract Development on Polkadot
 IMPORTANT: This documentation covers the ink! smart contract language in detail.
 For tooling and workflow automation, see pop-cli-comprehensive-guide.txt.
 
-RELATED DOCUMENTATION:
+2. RELATED DOCUMENTATION:
+==========================
 - pop-cli-comprehensive-guide.txt: Complete Pop CLI tooling guide (recommended for development workflow)
 - ink-technical-guide.txt: Deep technical implementation details
 - xcm-comprehensive-guide.txt: Cross-chain messaging integration (theory and patterns)
 - xcm-ink-examples-guide.txt: Real-world XCM contract examples with complete code
 
-QUICK START:
+3. QUICK START:
+===============
 For the fastest way to get started with ink! development, use Pop CLI:
 1. Install Pop CLI: brew install r0gue-io/pop-cli/pop
 2. Create contract: pop new contract my_contract

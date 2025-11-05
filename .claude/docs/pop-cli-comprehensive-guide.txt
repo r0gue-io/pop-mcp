@@ -267,9 +267,9 @@ pop up -p ./my_contract \
   --args arg1 arg2 \
   --suri <your-SURI>
 
-# Example: Deploy to Pop Network testnet
+# Example: Deploy to PassetHub testnet (recommended for contracts)
 pop up -p ./my_contract \
-  --url wss://rpc.popnetwork.xyz \
+  --url wss://testnet-passet-hub.polkadot.io \
   --constructor new \
   --args false \
   --suri "//Alice"
@@ -279,7 +279,7 @@ BROWSER WALLET SIGNING:
 Instead of exposing private keys with --suri, use browser wallet:
 ```bash
 pop up -p ./my_contract \
-  --url wss://rpc.popnetwork.xyz \
+  --url wss://testnet-passet-hub.polkadot.io \
   --constructor new \
   --args false \
   --use-wallet
@@ -755,7 +755,7 @@ pop bench --help  # See all available flags
 Why Benchmark?
 - Accurate weight calculations for extrinsics
 - Optimize runtime performance
-- Required for production chains
+- Required for development and testing
 - Ensures proper fee calculation
 
 4.6 ADDITIONAL CHAIN UTILITIES
@@ -847,7 +847,7 @@ pop call contract \
 # 8. Deploy to testnet
 pop up \
   -p . \
-  --url wss://rpc.popnetwork.xyz \
+  --url wss://testnet-passet-hub.polkadot.io \
   --constructor new \
   --args "1000000" \
   --use-wallet
@@ -1050,8 +1050,7 @@ Pop CLI supports deployment to any Substrate-based network.
 
 Common Networks:
 - Local development: ws://localhost:9944
-- Pop Network Testnet: wss://rpc.popnetwork.xyz
-- Contracts on Polkadot Asset Hub: wss://polkadot-asset-hub-rpc.polkadot.io
+- PassetHub Testnet (recommended for contracts): wss://testnet-passet-hub.polkadot.io
 - Paseo Testnet: wss://paseo-rpc.dwellir.com
 
 Example - Deploy to Multiple Networks:
@@ -1059,9 +1058,9 @@ Example - Deploy to Multiple Networks:
 # Local development
 pop up -p ./my_contract --constructor new --suri //Alice
 
-# Pop Network testnet
+# PassetHub testnet
 pop up -p ./my_contract \
-  --url wss://rpc.popnetwork.xyz \
+  --url wss://testnet-passet-hub.polkadot.io \
   --constructor new \
   --use-wallet
 
@@ -1078,7 +1077,7 @@ Network Considerations:
   - Block times
   - Supported features
   - Existential deposits
-- Test thoroughly on testnet before mainnet
+- Test thoroughly on testnet before testnet
 - Ensure accounts are funded on target network
 
 6.4 SCRIPT AUTOMATION
@@ -1441,7 +1440,7 @@ See ink! migration guide: https://use.ink/docs/v6/migration-guide
 
 4. Never Expose Private Keys:
    ```bash
-   # Bad: using --suri with real keys in production
+   # Bad: using --suri with real keys
    # Good: using --use-wallet
    pop up --use-wallet
    ```
@@ -1453,8 +1452,8 @@ See ink! migration guide: https://use.ink/docs/v6/migration-guide
 
    # Verify functionality
 
-   # Then deploy to mainnet
-   pop up --url wss://mainnet-rpc.io --use-wallet
+   # Then deploy to testnet
+   pop up --url wss://testnet-rpc.io --use-wallet
    ```
 
 6. Version Control Contract Addresses:
@@ -1463,7 +1462,7 @@ See ink! migration guide: https://use.ink/docs/v6/migration-guide
    {
      "local": "5CLPm1CeUvJhZ8GCDZCR7nWZ2m3XXe4X5MtAQK69zEjut36A",
      "testnet": "5Dpq2...",
-     "mainnet": "5Eqr7..."
+     "testnet": "5Eqr7..."
    }
    ```
 
@@ -1650,8 +1649,8 @@ Utilities:
 10.3 IMPORTANT ENDPOINTS
 ------------------------
 
-Pop Network:
-- Testnet: wss://rpc.popnetwork.xyz
+Polkadot:
+- Testnet: wss://testnet-passet-hub.polkadot.io
 
 Polkadot:
 - Polkadot: wss://rpc.polkadot.io
@@ -1689,7 +1688,7 @@ Benchmarking (pop bench):
 10.5 WELL-KNOWN ACCOUNTS (DEVELOPMENT)
 ---------------------------------------
 
-Use for local testing only (never on mainnet):
+Use for local testing only (never on testnet):
 
 - `//Alice`: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
 - `//Bob`: 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty
@@ -1764,7 +1763,7 @@ pop call contract \
 # Deploy to testnet
 pop up \
   -p . \
-  --url wss://rpc.popnetwork.xyz \
+  --url wss://testnet-passet-hub.polkadot.io \
   --constructor new \
   --args "1000000" "MyToken" "MTK" "18" \
   --use-wallet
@@ -1820,7 +1819,7 @@ pop build --release
 pop up --dry-run --constructor new --args "1000000" --suri //Alice
 
 # 3. Upload code only (doesn't instantiate)
-pop up --upload-only --use-wallet --url wss://mainnet-rpc.io
+pop up --upload-only --use-wallet --url wss://testnet-rpc.io
 
 # Code hash returned: 0xabc123...
 
@@ -1830,7 +1829,7 @@ pop call chain \
   --function instantiate \
   --args <code_hash> <gas> <storage> <constructor_data> \
   --use-wallet \
-  --url wss://mainnet-rpc.io
+  --url wss://testnet-rpc.io
 
 # Or use multisig pallet to coordinate
 ```

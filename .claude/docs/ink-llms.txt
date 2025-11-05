@@ -1644,7 +1644,7 @@ There are a couple use cases for including smart contract functionality on a par
 The most obvious use case is a parachain which provides smart contracts as a “first-class citizen”, meaning smart contracts are the central value proposition of the chain.
 
 Those chains typically take the off-the-shelf `pallet-revive` and create additional innovation on top of it.
-An example for this is [Pop Network](https://onpop.io/).
+An example for this is [Polkadot](https://onpop.io/).
 
 ### Use Case 2: Smart Contracts as "second-class citizens"
 There is another not so obvious use case for `pallet-revive`: smart contracts as “second-class citizens” on an existing chain. By this we mean that the central value proposition of the chain has nothing to do with smart contracts, but it still includes them as an add-on.

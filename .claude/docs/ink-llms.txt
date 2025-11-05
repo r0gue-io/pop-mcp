@@ -27,6 +27,7 @@ For the fastest way to get started with ink! development, use Pop CLI:
 3. Build: pop build
 4. Test: pop test
 5. Deploy: pop up --url wss://testnet-passet-hub.polkadot.io --use-wallet
+   IMPORTANT: Capture the contract address from the deployment output!
 
 See pop-cli-comprehensive-guide.txt for complete Pop CLI documentation.
 

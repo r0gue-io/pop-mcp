@@ -214,6 +214,14 @@ pub struct SearchDocumentationParams {
     scope: Option<crate::resources::DocScope>,
 }
 
+#[derive(Deserialize, Serialize, JsonSchema)]
+pub struct ConvertAddressParams {
+    #[schemars(description = "The Substrate or Ethereum address to convert")]
+    address: String,
+    #[schemars(description = "The SS58 prefix for Substrate addresses (defaults to 0 for Polkadot)")]
+    prefix: Option<u16>,
+}
+
 // ============================================================================
 // Tool Implementations
 // ============================================================================
@@ -677,6 +685,65 @@ Available ink! Contract Templates:\n\n\
         crate::resources::search_docs(&params.query, params.scope)
             .await
             .map_err(|e| McpError::internal_error(e.to_string(), None))
+    }
+
+    #[tool(description = "Convert between Ethereum and Substrate (Polkadot) addresses. If pop convert fails, use the runtime API fallback.")]
+    async fn convert_address(
+        &self,
+        Parameters(params): Parameters<ConvertAddressParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let mut args = vec!["convert", "address", &params.address];
+
+        let prefix_storage;
+        if let Some(prefix) = params.prefix {
+            prefix_storage = prefix.to_string();
+            args.push(&prefix_storage);
+        }
+
+        match Self::execute_pop_command(&args) {
+            Ok(output) => Ok(Self::success(format!("✅ Address conversion:\n\n{}", output))),
+            Err(e) => {
+                // Fallback: provide instructions for using runtime API
+                let fallback_script = format!(
+r#"❌ Pop convert failed: {}
+
+📝 Fallback method using Runtime API:
+
+If you need to convert a Substrate address to Ethereum format, use this Node.js script:
+
+```javascript
+const {{ ApiPromise, WsProvider }} = require('@polkadot/api');
+const {{ decodeAddress }} = require('@polkadot/util-crypto');
+const {{ u8aToHex }} = require('@polkadot/util');
+
+async function getEthAddress() {{
+  const provider = new WsProvider('wss://testnet-passet-hub.polkadot.io');
+  const api = await ApiPromise.create({{ provider }});
+
+  const accountId = '{}';
+  const publicKey = decodeAddress(accountId);
+  const publicKeyHex = u8aToHex(publicKey);
+
+  const result = await api.call.reviveApi.address(publicKeyHex);
+  console.log('Ethereum address:', result.toHex());
+
+  await api.disconnect();
+}}
+
+getEthAddress().catch(console.error);
+```
+
+To run this:
+1. Install dependencies: npm install @polkadot/api @polkadot/util @polkadot/util-crypto
+2. Save the script to a file (e.g., convert.js)
+3. Run: node convert.js
+
+Note: Conversion from Ethereum to Substrate addresses is not reliably possible.
+"#, e, params.address);
+
+                Ok(Self::success(fallback_script))
+            }
+        }
     }
 }
 

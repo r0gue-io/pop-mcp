@@ -1,6 +1,4 @@
 use rmcp::model::{CallToolResult, Content};
-use std::fs;
-use std::path::PathBuf;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
@@ -14,11 +12,16 @@ pub enum DocScope {
     All,
 }
 
-const DOCS_DIR: &str = ".claude/docs";
+// Embed documentation files directly in the binary at compile time
+const INK_LLMS_DOC: &str = include_str!("../.claude/docs/ink-llms.txt");
+const INK_TECHNICAL_DOC: &str = include_str!("../.claude/docs/ink-technical-guide.txt");
+const POP_CLI_DOC: &str = include_str!("../.claude/docs/pop-cli-comprehensive-guide.txt");
+const XCM_COMPREHENSIVE_DOC: &str = include_str!("../.claude/docs/xcm-comprehensive-guide.txt");
+const XCM_INK_EXAMPLES_DOC: &str = include_str!("../.claude/docs/xcm-ink-examples-guide.txt");
 
 struct DocFile {
     name: &'static str,
-    path: &'static str,
+    content: &'static str,
     uri: &'static str,
     scope: &'static str,
 }
@@ -26,31 +29,31 @@ struct DocFile {
 const DOC_FILES: &[DocFile] = &[
     DocFile {
         name: "ink! Comprehensive Guide",
-        path: "ink-llms.txt",
+        content: INK_LLMS_DOC,
         uri: "ink://docs/llm-guide",
         scope: "ink",
     },
     DocFile {
         name: "ink! Technical Guide",
-        path: "ink-technical-guide.txt",
+        content: INK_TECHNICAL_DOC,
         uri: "ink://docs/technical-guide",
         scope: "ink",
     },
     DocFile {
         name: "Pop CLI Comprehensive Guide",
-        path: "pop-cli-comprehensive-guide.txt",
+        content: POP_CLI_DOC,
         uri: "pop://docs/cli-guide",
         scope: "pop",
     },
     DocFile {
         name: "XCM Comprehensive Guide",
-        path: "xcm-comprehensive-guide.txt",
+        content: XCM_COMPREHENSIVE_DOC,
         uri: "xcm://docs/comprehensive-guide",
         scope: "xcm",
     },
     DocFile {
         name: "XCM ink! Examples Guide",
-        path: "xcm-ink-examples-guide.txt",
+        content: XCM_INK_EXAMPLES_DOC,
         uri: "xcm://docs/ink-examples",
         scope: "xcm",
     },
@@ -74,12 +77,8 @@ pub async fn search_docs(query: &str, scope: Option<DocScope>) -> Result<CallToo
             continue;
         }
 
-        // Read the document
-        let doc_path = PathBuf::from(DOCS_DIR).join(doc.path);
-        let content = match fs::read_to_string(&doc_path) {
-            Ok(content) => content,
-            Err(_) => continue, // Skip files that can't be read
-        };
+        // Documentation is embedded in the binary at compile time
+        let content = doc.content;
 
         // Search for matches
         let lines: Vec<&str> = content.lines().collect();

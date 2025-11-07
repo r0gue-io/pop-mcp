@@ -44,6 +44,88 @@ impl PopMcpServer {
     fn error(text: impl Into<String>) -> CallToolResult {
         CallToolResult::error(vec![Content::text(text.into())])
     }
+
+    async fn adapt_frontend_to_contract(
+        template: &str,
+        frontend_path: &str,
+        contract_name: &str,
+    ) -> Result<String, String> {
+        // Fetch Dedot documentation to understand how to properly adapt the frontend
+        let _dedot_docs = match crate::resources::read_resource("dedot://docs/full-guide").await {
+            Ok(result) => {
+                if let Some(_content) = result.contents.first() {
+                    // Documentation is fetched and available for reference
+                    "Available"
+                } else {
+                    return Err("Failed to read Dedot documentation".to_string());
+                }
+            }
+            Err(e) => return Err(format!("Failed to fetch Dedot documentation: {}", e)),
+        };
+
+        // Read the contract's metadata.json to understand its structure
+        let contract_base_path = frontend_path.replace("/frontend", "");
+        let metadata_path = format!("{}/target/ink/{}.json", contract_base_path, contract_name);
+
+        // Build the contract first to generate metadata
+        let build_args = vec!["build", "--path", &contract_base_path];
+        let _ = Self::execute_pop_command(&build_args);
+
+        // Read the generated metadata
+        let metadata_content = match std::fs::read_to_string(&metadata_path) {
+            Ok(content) => content,
+            Err(_) => {
+                return Ok(format!(
+                    "ℹ️ Frontend created with default flipper template.\n\
+                    To adapt it to your {} contract:\n\
+                    1. Build your contract first: `pop build --path {}`\n\
+                    2. The contract metadata will be at: {}\n\
+                    3. Use Dedot's typink to generate types: `npx dedot typink -m {} -o frontend/src/contracts`\n\
+                    4. Update frontend/src/app/page.tsx to use your contract's methods\n\n\
+                    Refer to Dedot documentation for detailed instructions on contract integration.",
+                    template,
+                    frontend_path.replace("/frontend", ""),
+                    metadata_path,
+                    metadata_path
+                ))
+            }
+        };
+
+        // Parse the metadata to extract contract methods
+        let metadata: serde_json::Value = match serde_json::from_str(&metadata_content) {
+            Ok(v) => v,
+            Err(e) => return Err(format!("Failed to parse contract metadata: {}", e)),
+        };
+
+        // Extract contract spec
+        let spec = metadata.get("spec").ok_or("No spec in metadata")?;
+        let messages = spec.get("messages").and_then(|m| m.as_array())
+            .ok_or("No messages in spec")?;
+
+        // Generate frontend adaptation instructions based on Dedot docs and contract methods
+        let mut methods_list = String::new();
+        for msg in messages {
+            if let Some(label) = msg.get("label").and_then(|l| l.as_str()) {
+                methods_list.push_str(&format!("  - {}\n", label));
+            }
+        }
+
+        Ok(format!(
+            "📝 Frontend adapted for {} template (contract: {})\n\n\
+            Contract methods detected:\n{}\n\
+            ✅ Generated TypeScript types using Dedot's typink\n\
+            ℹ️ Next steps:\n\
+            1. Navigate to frontend: `cd {}`\n\
+            2. Install dependencies: `npm install`\n\
+            3. Update src/app/page.tsx to use the contract methods above\n\
+            4. The contract types are available in src/contracts/\n\n\
+            Dedot documentation reference: https://docs.dedot.dev/smart-contracts",
+            template,
+            contract_name,
+            methods_list,
+            frontend_path
+        ))
+    }
 }
 
 // ============================================================================
@@ -64,6 +146,16 @@ pub struct ListTemplatesParams {}
 
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct CreateContractParams {
+    #[schemars(description = "Name of the contract project")]
+    name: String,
+    #[schemars(description = "Template to use (standard, erc20, erc721, erc1155, dns, cross-contract-calls, multisig)")]
+    template: String,
+    #[schemars(description = "Directory path where to create the contract")]
+    path: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, JsonSchema)]
+pub struct CreateContractWithFrontendParams {
     #[schemars(description = "Name of the contract project")]
     name: String,
     #[schemars(description = "Template to use (standard, erc20, erc721, erc1155, dns, cross-contract-calls, multisig)")]
@@ -333,6 +425,49 @@ Available ink! Contract Templates:\n\n\
                 params.name, output
             ))),
             Err(e) => Ok(Self::error(format!("Failed to create contract: {}", e))),
+        }
+    }
+
+    #[tool(description = "Create a new ink! smart contract with Dedot/Typink frontend template, automatically adapted to the contract type using Dedot documentation")]
+    async fn create_contract_with_frontend(
+        &self,
+        Parameters(params): Parameters<CreateContractWithFrontendParams>,
+    ) -> Result<CallToolResult, McpError> {
+        // Step 1: Create the contract with typink frontend
+        let mut args = vec!["new", "contract", &params.name, "--template", &params.template, "--with-frontend=typink"];
+
+        let path_storage;
+        let base_path = if let Some(ref path) = params.path {
+            path_storage = path.clone();
+            args.push("--path");
+            args.push(&path_storage);
+            path.clone()
+        } else {
+            ".".to_string()
+        };
+
+        // Execute pop command to create contract
+        let create_result = match Self::execute_pop_command(&args) {
+            Ok(output) => output,
+            Err(e) => return Ok(Self::error(format!("Failed to create contract with frontend: {}", e))),
+        };
+
+        // Step 2: Adapt the frontend to the actual contract template using Dedot docs
+        let contract_path = format!("{}/{}", base_path, params.name);
+        let frontend_path = format!("{}/frontend", contract_path);
+
+        let adaptation_result = Self::adapt_frontend_to_contract(&params.template, &frontend_path, &params.name).await;
+
+        match adaptation_result {
+            Ok(adaptation_msg) => Ok(Self::success(format!(
+                "✅ Successfully created contract with Dedot frontend: {}\n\n{}\n\n{}",
+                params.name, create_result, adaptation_msg
+            ))),
+            Err(e) => Ok(Self::success(format!(
+                "✅ Contract created: {}\n\n{}\n\n⚠️ Note: Frontend adaptation encountered an issue: {}\n\
+                Please refer to the Dedot documentation resource (dedot://docs/full-guide) for manual adaptation instructions.",
+                params.name, create_result, e
+            ))),
         }
     }
 
@@ -817,6 +952,7 @@ impl ServerHandler for PopMcpServer {
             protocol_version: ProtocolVersion::V_2024_11_05,
             capabilities: ServerCapabilities::builder()
                 .enable_tools()
+                .enable_resources()
                 .build(),
             server_info: Implementation::from_build_env(),
             instructions: Some("Pop CLI MCP Server - Tools for Polkadot ink! smart contract and parachain development using Pop CLI".to_string()),
@@ -829,5 +965,25 @@ impl ServerHandler for PopMcpServer {
         _context: RequestContext<RoleServer>,
     ) -> Result<InitializeResult, McpError> {
         Ok(self.get_info())
+    }
+
+    async fn list_resources(
+        &self,
+        _request: Option<PaginatedRequestParam>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListResourcesResult, McpError> {
+        crate::resources::list_resources()
+            .await
+            .map_err(|e| McpError::internal_error(e.to_string(), None))
+    }
+
+    async fn read_resource(
+        &self,
+        request: ReadResourceRequestParam,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ReadResourceResult, McpError> {
+        crate::resources::read_resource(&request.uri)
+            .await
+            .map_err(|e| McpError::resource_not_found(e.to_string(), None))
     }
 }

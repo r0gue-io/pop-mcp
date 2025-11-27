@@ -116,7 +116,7 @@ Add to your Claude Desktop configuration file:
 ```json
 {
   "mcpServers": {
-    "pop-cli": {
+    "pop-mcp": {
       "type": "stdio",
       "command": "/path/to/pop-mcp-server",
       "args": [],
@@ -139,7 +139,7 @@ Add the MCP server to your global Claude settings file at `~/.claude.json`:
 ```json
 {
   "mcpServers": {
-    "pop-cli": {
+    "pop-mcp": {
       "type": "stdio",
       "command": "/path/to/pop-mcp-server",
       "args": [],
@@ -156,12 +156,10 @@ Alternatively, add a `.mcp.json` file in your project directory:
 ```json
 {
   "mcpServers": {
-    "pop-cli": {
+    "pop-mcp": {
       "type": "stdio",
-      "command": "node",
-      "args": [
-        "/absolute/path/to/pop-mcp/build/index.js"
-      ],
+      "command": "/path/to/pop-mcp-server",
+      "args": [],
       "env": {}
     }
   }
@@ -172,16 +170,85 @@ Alternatively, add a `.mcp.json` file in your project directory:
 
 1. **Restart Claude Code** (or reload VS Code window)
 2. Verify the server is loaded with `/mcp` command in Claude Code
-3. You should see `pop-cli` listed with available tools
+3. You should see `pop-mcp` listed with available tools
+
+#### Auto-Loading Documentation Resources (Optional)
+
+To have Claude automatically load ink!, Pop CLI, and XCM documentation at the start of each conversation, create a `CLAUDE.md` file in your project root:
+
+```markdown
+# Polkadot Development Context
+
+Automatically load comprehensive documentation for ink! smart contracts and Polkadot development:
+
+@pop-mcp:ink://docs/llm-guide
+@pop-mcp:pop://docs/cli-guide
+
+For XCM cross-chain development:
+@pop-mcp:xcm://docs/comprehensive-guide
+@pop-mcp:xcm://docs/ink-examples
+```
+
+This ensures Claude has full access to ink!, Pop CLI, and XCM documentation without needing to manually @-mention resources in each conversation.
 
 Now you can develop Polkadot projects directly in your IDE with Claude's help!
+
+### Cursor Configuration
+
+Cursor is an AI-powered IDE that supports MCP servers. To configure Pop MCP:
+
+#### 1. Add the MCP Server
+
+1. Open **Settings** (⌘/Ctrl + ,)
+2. Navigate to **Tools & MCP**
+3. Click **Add new MCP Server**
+4. Paste the following configuration:
+
+```json
+{
+  "pop-mcp": {
+    "type": "stdio",
+    "command": "/path/to/pop-mcp-server",
+    "args": [],
+    "env": {}
+  }
+}
+```
+
+Replace `/path/to/pop-mcp-server` with the actual path to your binary, or just `pop-mcp-server` if it's in your PATH.
+
+#### 2. Auto-Load Documentation (Recommended)
+
+To have Cursor automatically load Polkadot documentation when working on ink! smart contracts:
+
+1. Open **Settings** (⌘/Ctrl + ,)
+2. Navigate to **Rules, Memories, Commands**
+3. Click **Add a Project Rule**
+4. Set the application mode to **Apply Intelligently**
+5. Name it: **When developing ink! smart contracts**
+6. Add the following content:
+
+```markdown
+Automatically load comprehensive documentation for ink! smart contracts and Polkadot development:
+
+@pop-mcp:ink://docs/llm-guide
+@pop-mcp:pop://docs/cli-guide
+
+For XCM cross-chain development:
+@pop-mcp:xcm://docs/comprehensive-guide
+@pop-mcp:xcm://docs/ink-examples
+```
+
+This ensures Cursor's AI has full access to ink!, Pop CLI, and XCM documentation when working on Polkadot projects.
+
+**Tip:** When starting a new chat in Cursor, click the rule name in the composer to manually add it to your conversation. This ensures the Polkadot documentation is loaded into the chat context.
 
 ### Other MCP Clients
 
 For other MCP clients (Cline, Zed, etc.), refer to their documentation for adding MCP servers. Generally, you'll need to provide:
 
-- Command: `node` (or `pop-mcp-server` if globally installed)
-- Args: `["/path/to/build/index.js"]` (if using local path)
+- Command: `pop-mcp-server` (or full path: `/path/to/pop-mcp-server`)
+- Args: `[]` (empty)
 
 ## Usage Examples
 

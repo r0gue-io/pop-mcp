@@ -15,8 +15,7 @@ pub enum DocScope {
 
 // Embed documentation files directly in the binary at compile time
 const INK_LLMS_DOC: &str = include_str!("../.claude/docs/ink-llms.txt");
-const INK_TECHNICAL_DOC: &str = include_str!("../.claude/docs/ink-technical-guide.txt");
-const POP_CLI_DOC: &str = include_str!("../.claude/docs/pop-cli-comprehensive-guide.txt");
+const POP_CLI_DOC: &str = include_str!("../.claude/docs/pop-cli-llms.txt");
 const XCM_COMPREHENSIVE_DOC: &str = include_str!("../.claude/docs/xcm-comprehensive-guide.txt");
 const XCM_INK_EXAMPLES_DOC: &str = include_str!("../.claude/docs/xcm-ink-examples-guide.txt");
 
@@ -37,12 +36,6 @@ const DOC_FILES: &[DocFile] = &[
         name: "ink! Comprehensive Guide",
         source: DocSource::Embedded(INK_LLMS_DOC),
         uri: "ink://docs/llm-guide",
-        scope: "ink",
-    },
-    DocFile {
-        name: "ink! Technical Guide",
-        source: DocSource::Embedded(INK_TECHNICAL_DOC),
-        uri: "ink://docs/technical-guide",
         scope: "ink",
     },
     DocFile {

@@ -1,0 +1,2803 @@
+# Pop CLI - Complete Guide
+
+This comprehensive guide covers Pop CLI, the all-in-one tool for Polkadot development.
+
+**Related Documentation:**
+- Security guidelines and best practices (see Security section below)
+- ink! language guide (see ink-llms-new.txt)
+- Technical ink! reference (see ink-technical-guide.txt)
+- Cross-chain messaging guide (see xcm-comprehensive-guide.txt)
+- XCM contract examples (see xcm-ink-examples-guide.txt)
+
+---
+
+## What is Pop CLI?
+
+Pop CLI is a CLI tool for building powerful Web3 solutions on Polkadot with Rust. It transforms the complex landscape of Polkadot development into an effortless and powerful experience, whether you're developing a chain or smart contract.
+
+- **GitHub**: https://github.com/r0gue-io/pop-cli
+- **Documentation**: https://learn.onpop.io
+
+### Key Features
+
+1. **Interactive Command-Line Interface**
+   - Guided workflows for all operations
+   - Type-to-filter navigation
+   - Inline documentation
+   - Clear visual feedback
+
+2. **Smart Contract Development**
+   - ink! v6 support by default
+   - Template system for quick project initialization
+   - Automated build configuration
+   - Integrated testing (unit and e2e)
+   - Browser wallet integration
+
+3. **Chain Development**
+   - Polkadot SDK integration
+   - Multiple chain templates
+   - Built-in benchmarking tools
+   - Runtime upgrade testing
+   - Relay chain integration
+
+4. **Deployment Automation**
+   - Local and public network support
+   - Automatic node management
+   - Gas estimation (dry-run)
+   - Browser wallet integration for secure signing
+   - Multi-network presets
+
+5. **Developer Experience**
+   - Single tool for everything
+   - Handles complex configurations automatically
+   - Rich error messages with suggestions
+   - Consistent workflow patterns
+   - Active community support
+
+### Why Use Pop CLI?
+
+**Simplifies Polkadot's Complexity**
+
+Polkadot development involves many tools and complex configurations:
+- RISC-V compilation targets
+- PolkaVM bytecode generation
+- Substrate node management
+- Pallet integration
+- Network connectivity
+
+Pop CLI abstracts all of this complexity behind simple, intuitive commands.
+
+---
+
+## Commands Reference
+
+### pop install
+
+Set up the environment for development by installing required packages.
+
+**Usage:**
+```bash
+pop install [OPTIONS]
+```
+
+**Options:**
+```
+-y, --skip-confirm  Automatically install all dependencies required without prompting for confirmation
+-h, --help          Print help
+```
+
+**What it does:**
+
+Installs necessary dependencies:
+- cargo-contract (for ink! smart contract compilation)
+- Substrate/Polkadot SDK dependencies
+- ink-node (for local testing)
+- Other required tools
+
+The setup process is interactive and will guide you through each step.
+
+**Examples:**
+
+```bash
+# Interactive mode (recommended)
+pop install
+
+# Auto-install without prompts
+pop install -y
+```
+
+**When to use:**
+- First time setup after installing Pop CLI
+- After updating Pop CLI
+- When missing dependencies
+- When encountering build errors
+
+**Next steps:**
+```bash
+pop new contract
+pop new chain
+```
+
+---
+
+### pop new contract
+
+Generate a new smart contract.
+
+**Usage:**
+```bash
+pop new contract [OPTIONS] [NAME]
+```
+
+**Arguments:**
+```
+[NAME]  The name of the contract
+```
+
+**Options:**
+```
+-t, --template <TEMPLATE>  The template to use [possible values: standard, erc20, erc721,
+                           erc1155, dns, cross-contract-calls, multisig]
+-h, --help                 Print help
+```
+
+**Templates:**
+
+**standard**
+- Basic flipper contract with boolean storage
+- Good for: Learning ink! basics
+
+**erc20**
+- Fungible token contract (cryptocurrency)
+- Features: transfer, approve, transfer_from, balance_of
+- Good for: Utility tokens, governance tokens, payment tokens
+
+**erc721**
+- Non-fungible token contract (NFTs)
+- Features: mint, transfer, approve, owner_of
+- Good for: Digital art, collectibles, gaming items
+
+**erc1155**
+- Multi-token contract (fungible + non-fungible)
+- Features: batch operations, multiple token types
+- Good for: Gaming ecosystems, multi-asset platforms
+
+**dns**
+- Domain name service contract
+- Features: register, set_address, get_address, transfer
+- Good for: Decentralized naming systems
+
+**cross-contract-calls**
+- Example of contract-to-contract interactions
+- Good for: Learning contract composition, DeFi protocols
+
+**multisig**
+- Multi-signature wallet
+- Features: propose_transaction, approve, execute
+- Good for: Treasury management, DAO operations
+
+**Examples:**
+
+```bash
+# Interactive mode (recommended)
+pop new contract
+
+# Create with specific template
+pop new contract my-token --template erc20
+pop new contract my-nft --template erc721
+pop new contract flipper --template standard
+```
+
+**Next steps:**
+```bash
+cd my-contract
+pop build --release
+# Deploy your contract on a local node (--skip-confirm ensures local node is spawned if not deployed yet, without prompting)
+pop up --use-wallet --skip confirm
+```
+
+---
+
+### pop new chain
+
+Generate a new parachain.
+
+**Usage:**
+```bash
+pop new chain [OPTIONS] [NAME] [PROVIDER]
+```
+
+**Arguments:**
+```
+[NAME]      Name of the project
+[PROVIDER]  Template provider [default: pop] [possible values: pop, openzeppelin, parity]
+```
+
+**Options:**
+```
+-t, --template <TEMPLATE>            Template to use
+-r, --release-tag <RELEASE_TAG>      Release tag to use for template
+-s, --symbol <SYMBOL>                Token Symbol [default: UNIT]
+-d, --decimals <DECIMALS>            Token Decimals [default: 12]
+-i, --endowment <INITIAL_ENDOWMENT>  Token Endowment for dev accounts [default: "1u64 << 60"]
+-v, --verify                         Verifies the commit SHA when fetching
+-h, --help                           Print help
+```
+
+**Templates:**
+
+**Pop Templates (provider: pop)**
+
+**r0gue-io/base-parachain**
+- Basic chain with essential pallets
+- Includes: System, Timestamp, Balances, Transaction Payment, Sudo, Aura, Grandpa
+- Good for: Learning, foundation for custom logic
+
+**r0gue-io/assets-parachain**
+- Chain with asset management pallet
+- Includes: Everything in base + Assets pallet
+- Good for: Token platforms, multi-currency systems
+
+**r0gue-io/contracts-parachain**
+- Chain with smart contract support
+- Includes: Everything in base + Contracts pallet
+- Good for: Smart contract platforms, DApp ecosystems
+
+**OpenZeppelin Templates (provider: openzeppelin)**
+
+**openzeppelin/generic-template**
+- Modular, production-ready runtime foundation
+- Good for: Production deployments, customizable base
+
+**openzeppelin/evm-template**
+- Ethereum-compatible chain
+- Includes: EVM pallet, Ethereum RPC compatibility
+- Good for: Ethereum migration, Solidity contracts
+
+**Parity Templates (provider: parity)**
+
+**paritytech/polkadot-sdk-parachain-template**
+- Official Polkadot SDK template
+- Includes: Latest Substrate features, Cumulus, XCM
+- Good for: Connecting to Polkadot/Kusama relay chains
+
+**Examples:**
+
+```bash
+# Interactive mode (recommended)
+pop new chain
+
+# Create with Pop templates
+pop new chain my-chain pop --template r0gue-io/base-parachain
+pop new chain token-hub pop --template r0gue-io/assets-parachain
+pop new chain contract-chain pop --template r0gue-io/contracts-parachain
+
+# Create with OpenZeppelin templates
+pop new chain my-chain openzeppelin --template openzeppelin/generic-template
+pop new chain evm-chain openzeppelin --template openzeppelin/evm-template
+
+# Create with Parity template
+pop new chain polkadot-chain parity --template paritytech/polkadot-sdk-parachain-template
+```
+
+**Next steps:**
+```bash
+cd my-chain
+pop build
+pop up
+```
+
+---
+
+### pop build (Contract)
+
+Build a smart contract.
+
+**Usage:**
+```bash
+pop build [OPTIONS] [PATH]
+```
+
+**Arguments:**
+```
+[PATH]  Directory path without flag for your project [default: current directory]
+```
+
+**Options:**
+```
+--path <PATH>          Directory path with flag for your project [default: current directory]
+-p, --package <PACKAGE>    The package to be built
+-r, --release              For production, always build in release mode
+--profile <PROFILE>    Build profile [default: debug]
+-f, --features <FEATURES>  List of features, separated by commas
+--metadata <METADATA>  Specification for contract metadata [possible values: ink, solidity]
+-h, --help             Print help
+```
+
+**Examples:**
+
+```bash
+# Build from inside contract directory
+cd my-contract
+pop build
+
+# Build release (recommended for deployment)
+pop build --release
+
+# Build from outside directory
+pop build --path ./my-contract --release
+
+# Build specific package
+pop build --package my-contract --release
+
+# Build contract with Solidity ABI
+pop build --release --metadata solidity
+```
+
+**Output Files (Generated in target/ink/):**
+
+- `my_contract.contract` - Complete deployment bundle (bytecode + metadata) - Use this file for deployment
+- `my_contract.polkavm` - Compiled PolkaVM bytecode
+- `my_contract.json` - Contract metadata (ABI)
+
+**What it does:**
+- Compiles Rust code to PolkaVM bytecode (ink! v6)
+- Generates contract metadata (ABI)
+- Creates .contract bundle for deployment
+- Applies optimizations in --release mode
+- Generate Solidity-compatible artifacts with `--metadata solidity`
+
+**Next steps:**
+```bash
+pop test
+pop up --use-wallet
+```
+
+---
+
+### pop build (Chain)
+
+Build a chain.
+
+**Usage:**
+```bash
+pop build [OPTIONS] [PATH]
+pop build <COMMAND>
+```
+
+**Commands:**
+```
+spec  Build a chain specification and its genesis artifacts
+```
+
+**Options:**
+```
+--path <PATH>          Directory path [default: current directory]
+-p, --package <PACKAGE>    The package to be built
+-r, --release              For production, always build in release mode
+--profile <PROFILE>    Build profile [default: debug]
+-f, --features <FEATURES>  List of features, separated by commas
+-h, --help             Print help
+```
+
+**Chain options:**
+```
+-b, --benchmark    Build with `runtime-benchmarks` feature
+-t, --try-runtime  Build with `try-runtime` feature
+```
+
+**Runtime options:**
+```
+-d, --deterministic  Build runtime deterministically (implies --only-runtime)
+--only-runtime   Build only the runtime
+```
+
+**Build Profiles:**
+- **debug** (default): Development builds with debug symbols
+- **release**: Built in release mode
+- **production**: Built for production
+
+**Chain Build Flags:**
+
+**--benchmark (-b):**
+- Builds runtime with `runtime-benchmarks` feature enabled
+- Required for running benchmarks on your chain
+- Use when you need to benchmark pallet extrinsics
+- Enables frame-benchmarking functionality
+
+When to use:
+```bash
+pop build --release --benchmark
+pop bench pallet  # Requires runtime built with --benchmark
+```
+
+**--try-runtime (-t):**
+- Builds runtime with `try-runtime` feature enabled
+- Required for testing runtime upgrades before deployment
+- Use when testing migrations and on-runtime-upgrade hooks
+- Enables try-runtime CLI functionality
+
+When to use:
+```bash
+pop build --release --try-runtime
+pop test on-runtime-upgrade  # Test migrations
+pop test fast-forward        # Test runtime upgrade simulation
+pop test execute-block       # Execute blocks against state
+```
+
+**--deterministic (-d):**
+- Builds runtime deterministically using Docker/Podman
+- Produces reproducible WASM runtime blob
+- Automatically implies --only-runtime
+- Ensures byte-for-byte identical builds
+
+When to use:
+- Production runtime releases
+- Reproducible builds for runtime upgrades
+
+Requirements:
+- Docker or Podman installed
+- Builds only the runtime (not the node)
+
+**--only-runtime:**
+- Builds only the runtime WASM blob
+- Skips building the node binary
+- Faster builds when only runtime changes
+- Used with --deterministic
+
+**Examples:**
+
+```bash
+# Standard development build
+pop build
+
+# Production release build
+pop build --release
+
+# Build for benchmarking pallets
+pop build --release --benchmark
+
+# Build for testing runtime upgrades
+pop build --release --try-runtime
+
+# Build deterministic runtime for governance
+pop build --deterministic
+
+# Build chain spec
+pop build spec
+
+# Build with multiple features
+pop build --release --benchmark --try-runtime
+
+# Build only runtime
+pop build --release --only-runtime
+
+# Build specific package
+pop build --package my-runtime --release
+```
+
+**Workflows:**
+
+**Benchmarking:**
+```bash
+# 1. Build with benchmark flag
+pop build --release --benchmark
+
+# 2. Run benchmarks
+pop bench pallet
+pop bench block
+pop bench overhead
+pop bench storage
+pop bench machine
+```
+
+**Testing Runtime Upgrades:**
+```bash
+# 1. Build with try-runtime flag
+pop build --release --try-runtime
+
+# 2. Test runtime upgrade
+pop test on-runtime-upgrade
+
+# 3. Test with state simulation
+pop test fast-forward
+
+# 4. Execute historical blocks
+pop test execute-block
+```
+
+**Production Deployment:**
+```bash
+# 1. Build deterministic runtime
+pop build --deterministic
+
+# 2. Build release node
+pop build --release
+
+# 3. Generate chain spec
+pop build spec --release --para-id 2000
+
+# 4. Deploy to relay chain
+pop up --id 2000 --relay-chain-url wss://paseo-rpc.dwellir.com
+```
+
+**Next steps:**
+```bash
+# For benchmarking
+pop bench pallet
+
+# For testing upgrades
+pop test on-runtime-upgrade
+
+# For deployment
+pop up
+
+# For extrinsics
+pop call chain --pallet System --function remark --args "Hello"
+```
+
+---
+
+### pop test (Contract)
+
+Test a smart contract.
+
+**Usage:**
+```bash
+pop test [OPTIONS] [PATH] [FILTER]
+```
+
+**Arguments:**
+```
+[PATH]  Directory path without flag for your project [default: current directory]
+```
+
+**Options:**
+```
+-p, --path <PATH>  Directory path for your project [default: current directory]
+-h, --help         Print help
+```
+
+**Smart contract testing options:**
+```
+-e, --e2e           Run end-to-end tests
+-n, --node <NODE>   Path to the contracts node binary to run e2e tests [default: none]
+-y, --skip-confirm  Automatically source the needed binary without prompting
+[FILTER]            Run with the specified test filter
+```
+
+**What it does:**
+
+**Unit Tests (pop test):**
+- Runs tests marked with #[ink::test]
+- Can only test state in the contract (not other contracts or blockchain state)
+- Fast feedback during development
+- Tests individual functions in isolation
+
+**E2E Tests (pop test --e2e):**
+- Automatically launches local ink-node if `--node` is not provided
+- Deploys contract to actual blockchain
+- Executes real transactions
+- Tests full deployment and interaction flow
+- Validates contract behavior on-chain
+
+**Examples:**
+
+```bash
+# Run unit tests
+cd my-contract
+pop test
+
+# Run end-to-end tests (deploys to local chain)
+pop test --e2e
+
+# Run e2e tests against custom node
+pop test --e2e --node ../my-chain
+
+# Run specific test
+pop test test_transfer_works
+
+# Run with filter
+pop test transfer
+
+# Auto-source binaries without prompt
+pop test --e2e --skip-confirm
+```
+
+**Troubleshooting:**
+
+**Tests fail to compile:**
+- Check ink! version matches cargo-contract
+- Update dependencies: `cargo update`
+- Clean and rebuild: `pop clean && pop build`
+
+**E2E tests hang:**
+- Kill existing ink-node: `lsof -i :9944 | grep LISTEN`
+- Use --skip-confirm flag
+- Check if port 9944 is available
+
+**E2E tests fail with "connection refused":**
+- ink-node binary not found
+- Use --node flag to specify path
+- Or run: `pop install`
+
+**Next steps:**
+```bash
+pop build --release
+pop up --use-wallet
+```
+
+---
+
+### pop test (Chain)
+
+Test a chain runtime.
+
+**Usage:**
+```bash
+pop test [OPTIONS] [PATH] [FILTER]
+pop test <COMMAND>
+```
+
+**Commands:**
+```
+on-runtime-upgrade  Test migrations
+execute-block       Executes the given block against some state
+fast-forward        Executes a runtime upgrade (optional), then mines blocks
+create-snapshot     Create a chain state snapshot
+```
+
+**on-runtime-upgrade:**
+
+Test runtime migrations before deployment.
+
+```bash
+pop test on-runtime-upgrade [OPTIONS] [COMMAND]
+```
+
+**Commands:**
+- `live` - Test against live chain
+- `snap` - Test against state snapshot
+
+**Options:**
+```
+--checks [<CHECKS>]               Select checks [default: pre-and-post]
+                                  Values: none, all, pre-and-post, try-state
+--no-weight-warnings              Disable weight warnings (relay chain)
+--disable-spec-version-check      Skip spec_version enforcement
+--disable-spec-name-check         Skip spec_name enforcement
+--disable-idempotency-checks      Skip migration idempotency checks
+--print-storage-diff              Print storage diff for non-idempotent migrations
+--disable-mbm-checks              Skip multi-block migration checks
+--mbm-max-blocks <N>              Max blocks for MBMs [default: 600]
+--blocktime <MS>                  Chain blocktime in ms [default: 6000]
+--runtime <RUNTIME>               Runtime to use [default: existing]
+--profile <PROFILE>               Build profile [default: release]
+-n, --no-build                    Skip rebuilding runtime
+-y, --skip-confirm                Auto-source binaries
+```
+
+**Test against live chain:**
+```
+-u, --uri <URI>                   Chain URL to connect
+-a, --at <AT>                     Block hash to fetch state
+-p, --pallet <PALLET>...          Specific pallets to test
+```
+
+**Test against snapshot:**
+```
+-p, --path <PATH>                 Path to snapshot file
+```
+
+**fast-forward:**
+
+Execute runtime upgrade and mine blocks with try-state checks.
+
+```bash
+pop test fast-forward [OPTIONS] [COMMAND]
+```
+
+**Commands:**
+- `live` - Test against live chain
+- `snap` - Test against state snapshot
+
+**Options:**
+```
+--n-blocks <N>                    Number of empty blocks to process
+--blocktime <MS>                  Chain blocktime in ms [default: 6000]
+--try-state <TRY_STATE>           Which try-state targets to execute
+--run-migrations                  Run pending migrations before fast-forward
+--runtime <RUNTIME>               Runtime to use [default: existing]
+--disable-spec-name-check         Skip spec_name enforcement
+--profile <PROFILE>               Build profile [default: release]
+-n, --no-build                    Skip rebuilding runtime
+-y, --skip-confirm                Auto-source binaries
+```
+
+**execute-block:**
+
+Execute specific block against chain state.
+
+```bash
+pop test execute-block [OPTIONS]
+```
+
+**Options:**
+```
+-u, --uri <URI>                   Chain URL to connect
+-a, --at <AT>                     Block hash to fetch state
+-p, --pallet <PALLET>...          Specific pallets to scrape
+--prefix <HASHED_PREFIXES>...     Storage key prefixes (0x hex)
+--child-tree                      Fetch child keys
+--try-state <TRY_STATE>           Which try-state targets to execute
+--runtime <RUNTIME>               Runtime to use [default: existing]
+--profile <PROFILE>               Build profile [default: release]
+-n, --no-build                    Skip rebuilding runtime
+-y, --skip-confirm                Auto-source binaries
+```
+
+**create-snapshot:**
+
+Create chain state snapshot for testing.
+
+```bash
+pop test create-snapshot [OPTIONS] [SNAPSHOT_PATH]
+```
+
+**Arguments:**
+```
+[SNAPSHOT_PATH]  Path to write snapshot file
+```
+
+**Options:**
+```
+-u, --uri <URI>                   Chain URL to connect
+-a, --at <AT>                     Block hash to fetch state
+-p, --pallet <PALLET>...          Specific pallets to scrape
+--prefix <HASHED_PREFIXES>...     Storage key prefixes (0x hex)
+--child-tree                      Fetch child keys
+-y, --skip-confirm                Auto-source binaries
+```
+
+**Workflow: Testing Runtime Upgrade**
+
+**IMPORTANT:** Requires runtime built with --try-runtime flag
+
+```bash
+# Step 1: Build runtime with try-runtime
+pop build --release --try-runtime
+
+# Step 2: Create snapshot (optional but recommended)
+pop test create-snapshot ./snapshot.json \
+  --uri wss://paseo-rpc.dwellir.com
+
+# Step 3: Test migrations
+pop test on-runtime-upgrade snap \
+  --path ./snapshot.json
+
+# Step 4: Test with all checks
+pop test on-runtime-upgrade snap \
+  --path ./snapshot.json \
+  --checks all
+
+# Step 5: Fast-forward blocks to verify
+pop test fast-forward snap \
+  --path ./snapshot.json \
+  --n-blocks 100 \
+  --run-migrations
+
+# Step 6: If all pass, deploy to production
+```
+
+**Checks Explained:**
+
+**--checks <value>:**
+
+- **none**: No runtime checks performed (fastest, only for quick validation)
+- **pre-and-post** (default): Pre-upgrade and post-upgrade checks, validates state consistency
+- **all**: Pre-upgrade + post-upgrade + try-state checks (most comprehensive)
+- **try-state**: Only try-state checks, validates pallet invariants
+
+**Idempotency Checks:**
+
+What: Verifies migrations produce same result when run twice
+Why: Ensures migrations are safe to re-run
+
+- `--disable-idempotency-checks`: Skip idempotency validation (use only if certain migrations are idempotent)
+- `--print-storage-diff`: When idempotency fails, show storage differences (helps debug non-idempotent migrations)
+
+**Multi-Block Migrations (MBM):**
+
+What: Migrations that span multiple blocks
+
+- `--disable-mbm-checks`: Skip multi-block migration execution (use if no MBMs in runtime)
+- `--mbm-max-blocks <N>`: Max blocks to execute MBMs [default: 600] (increase if MBMs take longer)
+- `--blocktime <MS>`: Chain blocktime in milliseconds [default: 6000] (adjust for your chain's block time)
+
+**Examples:**
+
+```bash
+# Quick migration test (snapshot)
+pop build --release --try-runtime
+pop test create-snapshot ./snap.json --uri wss://paseo-rpc.dwellir.com
+pop test on-runtime-upgrade snap --path ./snap.json
+
+# Comprehensive migration test
+pop test on-runtime-upgrade snap \
+  --path ./snap.json \
+  --checks all \
+  --print-storage-diff
+
+# Test specific pallets only
+pop test on-runtime-upgrade live \
+  --uri wss://paseo-rpc.dwellir.com \
+  --pallet Balances \
+  --pallet Staking
+
+# Fast-forward with migration
+pop test fast-forward snap \
+  --path ./snap.json \
+  --n-blocks 50 \
+  --run-migrations \
+  --try-state All
+
+# Execute specific block
+pop test execute-block \
+  --uri wss://paseo-rpc.dwellir.com \
+  --at 0xabc123... \
+  --try-state All
+
+# Create full state snapshot
+pop test create-snapshot ./full-state.json \
+  --uri wss://paseo-rpc.dwellir.com
+
+# Create partial snapshot (specific pallets)
+pop test create-snapshot ./partial-state.json \
+  --uri wss://paseo-rpc.dwellir.com \
+  --pallet Balances \
+  --pallet System
+```
+
+**Troubleshooting:**
+
+**Error: "try-runtime feature not enabled":**
+```bash
+# Solution: Build with try-runtime flag
+pop build --release --try-runtime
+```
+
+**Error: "spec_version not greater":**
+```bash
+# Solution: Use --disable-spec-version-check
+pop test on-runtime-upgrade snap --path ./snap.json --disable-spec-version-check
+```
+
+**Error: "Migration not idempotent":**
+```bash
+# Solution: Debug with storage diff
+pop test on-runtime-upgrade snap --path ./snap.json --print-storage-diff
+```
+
+**Error: Connection refused:**
+```bash
+# Solution: Check URI and network connectivity
+pop test on-runtime-upgrade live --uri wss://correct-url.com
+```
+
+**Snapshot too large:**
+```bash
+# Solution: Scrape specific pallets only
+pop test create-snapshot ./snap.json --uri wss://... --pallet Balances
+```
+
+**Best Practices:**
+
+1. **Always test migrations before production:**
+   - Create snapshot from production chain
+   - Test on snapshot, not live chain
+   - Use --checks all for comprehensive validation
+
+2. **Version control snapshots:**
+   - Commit snapshots for reproducible tests
+   - Tag snapshots with block number and date
+
+3. **CI/CD integration:**
+```yaml
+- name: Test runtime upgrade
+  run: |
+    pop build --release --try-runtime
+    pop test on-runtime-upgrade snap --path ./snap.json
+```
+
+4. **Test with realistic state:**
+   - Use production snapshot
+   - Or use testnet snapshot
+   - Not empty state
+
+5. **Validate idempotency:**
+   - Never disable idempotency checks in production
+   - Fix non-idempotent migrations
+
+**Next steps:**
+```bash
+# Build deterministic runtime for governance
+pop build --deterministic
+
+# Deploy runtime upgrade
+# (via governance or sudo)
+```
+
+---
+
+### pop up (Contract)
+
+Deploy a smart contract.
+
+**Usage:**
+```bash
+pop up [OPTIONS] [PATH]
+```
+
+**Arguments:**
+```
+[PATH]  Directory path without flag for your project [default: current directory]
+```
+
+**Options:**
+```
+--path <PATH>  Path to the project directory
+-h, --help     Print help
+```
+
+**Smart contract deployment options:**
+```
+-c, --constructor <CONSTRUCTOR>  The name of the contract constructor to call [default: new]
+-a, --args [<ARGS>...]           The constructor arguments, encoded as strings
+-v, --value <VALUE>              Transfers an initial balance to the instantiated contract [default: 0]
+-g, --gas <gas>                  Maximum amount of gas (auto-estimated if not specified)
+-P, --proof-size <PROOF_SIZE>    Maximum proof size (auto-estimated if not specified)
+-S, --salt <SALT>                A salt used in address derivation (for multiple instances)
+-u, --url <URL>                  Websocket endpoint [default: ws://localhost:9944/]
+-s, --suri <SURI>                Secret key URI [default: //Alice]
+-w, --use-wallet                 Use a browser extension wallet to sign
+-D, --dry-run                    Perform a dry-run via RPC (does not submit transaction)
+-U, --upload-only                Uploads the contract only, without instantiation
+-y, --skip-confirm               Automatically source needed binary without prompting
+--skip-build                 Skip building the contract before deployment
+```
+
+**What it does:**
+
+**🚀 AUTOMATIC LOCAL NODE HANDLING:**
+- Pop CLI automatically launches and manages a local ink-node when deploying to localhost
+- No need to manually start a node with `--url ws://localhost:9944` (this is the default)
+- Just run `pop up -y` in your contract directory for instant local deployment
+- The `-y` flag auto-confirms binary downloads without prompting
+- Pop CLI handles all node lifecycle management automatically
+
+**Full Deployment (default):**
+1. Builds contract if not already built
+2. Uploads contract bytecode to chain (code upload)
+3. Calls constructor to instantiate contract
+4. Returns contract address
+
+**Upload Only (--upload-only):**
+1. Builds contract if not already built
+2. Uploads contract bytecode to chain
+3. Returns code hash (not contract address)
+4. No instantiation - use for code verification, multi-sig deployments, separate upload/instantiate steps
+
+**Dry Run (--dry-run):**
+1. Simulates deployment via RPC
+2. Estimates gas and proof size required
+3. Does NOT submit transaction
+4. Use before actual deployment
+
+**IMPORTANT:** Save the contract address from output!
+
+**Deployment Flags Explained:**
+
+**--constructor <NAME>:**
+- Name of constructor function to call
+- Default: "new"
+- Must match constructor name in contract
+- Example: "new", "default", "init"
+
+**--args [<ARGS>...]:**
+- Constructor arguments as strings
+- Space-separated
+- Encoded automatically
+- Match constructor signature order
+- Examples: Boolean (true/false), Number (1000000), String ("MyToken"), Address (5GrwvaEF...)
+
+**--value <VALUE>:**
+- Initial balance to transfer to contract
+- In smallest unit (plancks)
+- Default: 0
+- Use when contract needs initial funds
+- Example: 1000000000000 (1 token with 12 decimals)
+
+**--gas <GAS>:**
+- Max gas limit for deployment
+- Auto-estimated if not provided (dry-run)
+- Set higher if deployment fails with OutOfGas
+- Example: 100000000000
+
+**--proof-size <SIZE>:**
+- Max proof size for deployment
+- Auto-estimated if not provided (dry-run)
+- Substrate storage proof limit
+- Example: 1000000
+
+**--salt <SALT>:**
+- Salt for deterministic address derivation
+- Use to deploy multiple instances from same account
+- Each salt creates unique address
+- Example: "0x01", "0x02", "salt1"
+
+**--url <URL>:**
+- Chain endpoint to deploy to
+- Default: ws://localhost:9944/
+- Examples:
+  - Local: ws://localhost:9944
+  - PassetHub Testnet: wss://testnet-passet-hub.polkadot.io
+
+**--suri <SURI>:**
+- Secret URI for signing account
+- Default: //Alice (dev account)
+- Dev accounts: //Alice, //Bob, //Charlie
+- With password: //Alice///MyPassword
+- NEVER use dev accounts on production!
+
+**--use-wallet:**
+- Use browser extension wallet (polkadot-js, Talisman, SubWallet)
+- Prompts for signature in browser
+- ALWAYS use for testnet/mainnet
+- More secure than --suri
+
+**--dry-run:**
+- Simulate deployment without submitting
+- Estimates gas and proof size
+- Validates constructor args
+- No transaction fee
+- Use before actual deployment
+
+**--upload-only:**
+- Only upload contract code
+- Does NOT instantiate contract
+- Returns code hash instead of contract address
+- Use cases: Code verification, multi-sig instantiation, governance deployment, separate upload/instantiate
+
+**--skip-confirm:**
+- Auto-source binaries without prompting
+- Useful for CI/CD pipelines
+- Automatically confirms downloads
+
+**--skip-build:**
+- Skip building contract before deployment
+- Only if contract already built
+- Will build if no artifacts found
+- Saves time in repeated deployments
+
+**Networks:**
+
+**Local (default):**
+- Pop CLI automatically launches ink-node if not running with `--skip-confirm` flag
+- **URL: `ws://localhost:9944/`** - Use this to interact with local ink-node
+- Dev accounts (//Alice) work
+- Fast iteration
+- Use for development
+
+**PassetHub Testnet (recommended for testing):**
+- wss://testnet-passet-hub.polkadot.io
+- Public testnet
+- Free testnet tokens from faucet
+- Use --use-wallet for security
+- Realistic environment
+
+**PassetHub Mainnet (production):**
+- wss://passet-hub.polkadot.io
+- Production network
+- Costs real tokens
+- ALWAYS use --use-wallet
+- Test on testnet first!
+
+**Examples:**
+
+```bash
+# Simple deployment to local node with specific args. Local node is automatically launched by using the `--skip-confirm` flag
+pop up --constructor new --args false --use-wallet --skip-confirm
+
+# Deploy with browser wallet
+pop up --use-wallet
+
+# Deploy to testnet
+pop up \
+  --url wss://testnet-passet-hub.polkadot.io \
+  --constructor new \
+  --args "1000000" \
+  --use-wallet
+
+# Estimate gas first (dry-run)
+pop up --dry-run --constructor new --args false --use-wallet
+
+# Deploy ERC20 token
+pop up --constructor new \
+  --args "1000000" "MyToken" "MTK" "18" \
+  --use-wallet
+
+# Deploy with initial balance
+pop up --constructor new \
+  --args false \
+  --value 1000000000000 \
+  --use-wallet
+
+# Deploy multiple instances (same account)
+pop up --constructor new --args false --salt "0x01" --use-wallet
+pop up --constructor new --args false --salt "0x02" --use-wallet
+
+# Upload only (multi-sig deployment)
+pop up --upload-only --use-wallet
+
+# Deploy with custom gas limit
+pop up --constructor new \
+  --args false \
+  --gas 200000000000 \
+  --proof-size 2000000 \
+  --use-wallet
+
+# Skip build (already built)
+pop up --skip-build --constructor new --args false --use-wallet
+
+# CI/CD deployment
+pop up --constructor new \
+  --args false \
+  --skip-confirm \
+  --suri "$DEPLOY_KEY"
+```
+
+**Troubleshooting:**
+
+**Error: "contract already exists":**
+```bash
+# Solution: Use different --salt
+pop up --constructor new --args false --salt "0x01"
+```
+
+**Error: "OutOfGas":**
+```bash
+# Solution: Increase --gas limit
+pop up --constructor new --args false --gas 200000000000
+```
+
+**Error: "insufficient balance":**
+- Local: Accounts have balance by default
+- Testnet: Get tokens from faucet
+
+**Error: "constructor not found":**
+```bash
+# Solution: Check constructor name in contract
+pop up --constructor default  # if constructor named "default"
+```
+
+**Error: "invalid argument":**
+- Review contract constructor signature
+- Ensure argument count matches
+- Check argument types
+
+**Error: "connection refused":**
+- Local: Ensure ink-node is running
+- Remote: Check network connectivity
+
+**Wallet doesn't popup:**
+- Install polkadot-js, Talisman, or SubWallet extension
+- Ensure extension is unlocked
+- Check browser allows popups
+
+**Best Practices:**
+
+1. **Always dry-run first:**
+   - Estimates gas/proof-size
+   - Validates constructor args
+   - No transaction fee
+
+2. **Use --use-wallet for testnet/mainnet:**
+   - More secure than --suri
+   - Never hardcode private keys
+
+3. **Save deployment info:**
+   - Contract address
+   - Code hash
+   - Constructor args
+   - Network deployed to
+   - Block number
+
+4. **Test on testnet before mainnet:**
+   - Catch issues early
+   - No cost for mistakes
+
+5. **Verify constructor args:**
+   - Double-check values
+   - Irreversible after deployment
+
+**Next steps:**
+
+After deployment, save contract address:
+```bash
+CONTRACT_ADDR="5CLPm..."
+```
+
+Then interact with contract:
+```bash
+# Read-only query
+pop call contract \
+  --contract $CONTRACT_ADDR \
+  --message get \
+  --use-wallet
+
+# State-changing call
+pop call contract \
+  --contract $CONTRACT_ADDR \
+  --message flip \
+  --use-wallet \
+  -x
+```
+
+---
+
+### pop up (Chain)
+
+Deploy a chain (parachain).
+
+**Usage:**
+```bash
+pop up [OPTIONS] [PATH]
+pop up <COMMAND>
+```
+
+**Commands:**
+```
+network   Launch a local network by specifying a network configuration file
+paseo     Launch a local Paseo network
+kusama    Launch a local Kusama network
+polkadot  Launch a local Polkadot network
+westend   Launch a local Westend network
+```
+
+**Arguments:**
+```
+[PATH]  Directory path without flag [default: current directory]
+```
+
+**Options:**
+```
+--path <PATH>  Path to the project directory
+-h, --help     Print help
+```
+
+**Chain deployment options:**
+```
+-i, --id <ID>                        ID to use (new ID reserved if not specified)
+--skip-registration              Flag to skip registration and only deploy
+--chain-spec <CHAIN_SPEC>        Path to chain spec file
+-G, --genesis-state <GENESIS_STATE>  Path to genesis state file
+-C, --genesis-code <GENESIS_CODE>    Path to genesis code file
+--relay-chain-url <RELAY_CHAIN_URL>  Websocket endpoint of relay chain
+--proxy <PROXIED_ADDRESS>        Proxied address
+--profile <PROFILE>              Build profile [default: release]
+```
+
+**What it does:**
+
+**Local Network (pop up):**
+- Launches relay chain (Polkadot/Kusama/etc)
+- Registers parachain ID
+- Deploys your chain
+- All running locally
+
+**Testnet/Mainnet Deployment:**
+- Reserves parachain ID
+- Uploads chain runtime
+- Deploys to target relay chain
+- Requires funded account
+
+**Examples:**
+
+```bash
+# Start local development network
+pop up
+
+# Launch local Polkadot relay chain
+pop up polkadot
+
+# Deploy to Paseo testnet
+pop up --id 4001 --relay-chain-url wss://paseo-rpc.dwellir.com
+
+# Deploy with proxy account
+pop up --id 2000 \
+  --relay-chain-url wss://paseo-rpc.dwellir.com \
+  --proxy 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+
+# Skip registration (already registered)
+pop up --id 2000 --skip-registration --relay-chain-url wss://paseo-rpc.dwellir.com
+```
+
+**Networks:**
+
+**Local Development:**
+```bash
+pop up polkadot
+pop up kusama
+pop up westend
+pop up paseo
+```
+
+**Paseo Testnet (recommended):**
+- wss://paseo-rpc.dwellir.com
+- Use for testing before mainnet
+
+**Kusama:**
+- wss://kusama-rpc.dwellir.com
+- Production canary network
+
+**Polkadot:**
+- wss://polkadot-rpc.dwellir.com
+- Production mainnet
+
+**Important:**
+- Parachain ID must be registered on relay chain
+- Requires funded account for testnet/mainnet
+- Genesis state and code generated automatically
+- Use --profile release for production
+
+**Next steps:**
+
+```bash
+# Save parachain ID from output
+PARA_ID=2000
+
+# Call chain extrinsic
+pop call chain \
+  --pallet System \
+  --function remark \
+  --args "Hello from my chain"
+```
+
+---
+
+### pop call contract
+
+Call a contract.
+
+**Usage:**
+```bash
+pop call contract [OPTIONS] [PATH]
+```
+
+**Arguments:**
+```
+[PATH]  Directory path without flag [default: current directory]
+```
+
+**Options:**
+```
+-p, --path <PATH>          Path to the contract build directory or artifact
+-c, --contract <CONTRACT>  The address of the contract to call [env: CONTRACT=]
+-m, --message <MESSAGE>    The name of the contract message to call
+-a, --args [<ARGS>...]     The message arguments, encoded as strings
+-v, --value <VALUE>        The value to be transferred as part of the call [default: 0]
+-g, --gas <gas>            Maximum amount of gas (auto-estimated if not specified)
+-P, --proof-size <PROOF_SIZE>  Maximum proof size (auto-estimated if not specified)
+-u, --url <URL>            Websocket endpoint of a node
+-s, --suri <SURI>          Secret key URI for the account calling the contract
+-w, --use-wallet           Use a browser extension wallet to sign
+-x, --execute              Submit an extrinsic for on-chain execution
+-D, --dry-run              Perform a dry-run via RPC (does not submit transaction)
+-d, --dev                  Developer mode (bypasses prompts for faster testing)
+-h, --help                 Print help
+```
+
+**What it does:**
+
+**Read-Only Queries (without -x):**
+- Query contract state
+- No gas cost (free)
+- Instant results
+- No transaction submitted
+- No state changes
+
+**State-Changing Calls (with -x):**
+- Modify contract state
+- Costs gas
+- Requires transaction signing
+- Changes persisted on-chain
+- Transaction included in block
+
+**Dry-Run (with --dry-run):**
+- Simulate call without submitting
+- Estimate gas consumption
+- Validate arguments
+- No cost, no state changes
+
+**Key Flags Explained:**
+
+**--contract <ADDRESS>:**
+- Contract address to call
+- Can be set via CONTRACT env var
+- Example: 5CLPm1CeUvJhZ8GCDZCR7nWZ2m3XXe4X5MtAQK69zEjut36A
+
+**--message <NAME>:**
+- Message (function) name to call
+- Must match exactly as in contract
+- Examples: "get", "transfer", "flip", "balance_of"
+
+**--args [<ARGS>...]:**
+- Message arguments as strings
+- Space-separated
+- Auto-encoded based on contract metadata
+- Examples: Address (5GrwvaEF...), Number (1000), Boolean (true/false), String ("MyToken")
+
+**--value <VALUE>:**
+- Amount to transfer with call (in plancks)
+- Default: 0
+- Use for payable messages
+- Example: 1000000000000 (1 token with 12 decimals)
+
+**--gas <GAS>:**
+- Max gas limit for call
+- Auto-estimated if not specified
+- Increase if call fails with OutOfGas
+- Example: 100000000000
+
+**--proof-size <SIZE>:**
+- Max proof size for call
+- Auto-estimated if not specified
+- Substrate storage proof limit
+- Example: 1000000
+
+**--url <URL>:**
+- Chain endpoint to call
+- Default: ws://localhost:9944
+- Examples:
+  - Local: ws://localhost:9944
+  - PassetHub Testnet: wss://testnet-passet-hub.polkadot.io
+
+**--suri <SURI>:**
+- Secret URI for signing account
+- For local dev only!
+- Examples: //Alice, //Bob
+- NEVER use on testnet/mainnet
+
+**--use-wallet:**
+- Use browser extension wallet
+- ALWAYS use for testnet/mainnet
+- More secure than --suri
+- Prompts for signature
+
+**--execute (-x):**
+- Submit transaction on-chain
+- **CRITICAL FLAG**
+- Without: Read-only query (free)
+- With: State-changing call (costs gas)
+
+**--dry-run (-D):**
+- Simulate call via RPC
+- Estimate gas and validate args
+- No transaction submitted
+- Use before --execute
+
+**--dev (-d):**
+- Developer mode
+- Bypasses confirmations
+- Faster testing workflow
+- Use for local dev only
+
+**--path <PATH>:**
+- Path to contract project or .contract file
+- Default: current directory
+- Needs contract metadata (.json)
+
+**Read-Only vs State-Changing:**
+
+**Read-Only Query (NO -x flag):**
+```bash
+pop call contract \
+  --contract 0xABC... \
+  --message balance_of \
+  --args 0x123... \
+  --use-wallet
+```
+- Free (no gas cost)
+- Instant result
+- No transaction
+- View contract state
+
+**State-Changing Call (WITH -x flag):**
+```bash
+pop call contract \
+  --contract 0xABC... \
+  --message transfer \
+  --args 0x456... 1000 \
+  --use-wallet \
+  -x
+```
+- Costs gas
+- Modifies state
+- Transaction submitted
+- Included in block
+
+**Rule: Use -x only when modifying state!**
+
+**Examples:**
+
+```bash
+# Query on local node (read-only)
+pop call contract \
+  --path . \
+  --contract 0xABC... \
+  --message balance_of \
+  --args 0x123... \
+  --url ws://localhost:9944/ \
+  --use-wallet
+
+# Transfer tokens on local node (state-changing)
+pop call contract \
+  --path . \
+  --contract 0xABC... \
+  --message transfer \
+  --args 0x456... 1000 \
+  --url ws://localhost:9944/ \
+  --use-wallet \
+  -x
+
+# Call on testnet
+pop call contract \
+  --path . \
+  --url wss://testnet-passet-hub.polkadot.io \
+  --contract 0xABC... \
+  --message get \
+  --use-wallet
+
+# Estimate gas before executing
+pop call contract \
+  --path . \
+  --contract 0xABC... \
+  --message transfer \
+  --args 0x456... 1000 \
+  --dry-run \
+  --use-wallet
+
+# Call with value transfer (payable message)
+pop call contract \
+  --path . \
+  --contract 0xABC... \
+  --message deposit \
+  --value 1000000000000 \
+  --use-wallet \
+  -x
+
+# Dev mode (fast testing)
+pop call contract \
+  --contract 0xABC... \
+  --message flip \
+  --use-wallet \
+  --dev \
+  -x
+
+# Use CONTRACT env var
+export CONTRACT=0xABC...
+pop call contract \
+  --message get \
+  --use-wallet
+
+# Call with custom gas
+pop call contract \
+  --contract 0xABC... \
+  --message complex_operation \
+  --gas 200000000000 \
+  --proof-size 2000000 \
+  --use-wallet \
+  -x
+```
+
+**Workflow: Testing Contract:**
+
+```bash
+# 1. Deploy contract
+pop up --constructor new --args false --use-wallet
+CONTRACT=5CLPm...
+
+# 2. Query initial state (read-only)
+pop call contract \
+  --contract $CONTRACT \
+  --message get \
+  --use-wallet
+
+# 3. Dry-run state change
+pop call contract \
+  --contract $CONTRACT \
+  --message flip \
+  --dry-run \
+  --use-wallet
+
+# 4. Execute state change
+pop call contract \
+  --contract $CONTRACT \
+  --message flip \
+  --use-wallet \
+  -x
+
+# 5. Verify state changed
+pop call contract \
+  --contract $CONTRACT \
+  --message get \
+  --use-wallet
+```
+
+**Workflow: ERC20 Interaction:**
+
+```bash
+# Check balance (read-only)
+pop call contract \
+  --contract $TOKEN_ADDRESS \
+  --message balance_of \
+  --args $USER_ADDRESS \
+  --use-wallet
+
+# Check total supply (read-only)
+pop call contract \
+  --contract $TOKEN_ADDRESS \
+  --message total_supply \
+  --use-wallet
+
+# Transfer tokens (state-changing)
+pop call contract \
+  --contract $TOKEN_ADDRESS \
+  --message transfer \
+  --args $RECIPIENT_ADDRESS 1000 \
+  --use-wallet \
+  -x
+
+# Approve spender (state-changing)
+pop call contract \
+  --contract $TOKEN_ADDRESS \
+  --message approve \
+  --args $SPENDER_ADDRESS 5000 \
+  --use-wallet \
+  -x
+
+# Check allowance (read-only)
+pop call contract \
+  --contract $TOKEN_ADDRESS \
+  --message allowance \
+  --args $OWNER_ADDRESS $SPENDER_ADDRESS \
+  --use-wallet
+```
+
+**Troubleshooting:**
+
+**Error: "contract not found":**
+- Check contract address is correct
+- Verify address on block explorer
+- Ensure deployed on correct network
+
+**Error: "message not found":**
+- Check message name spelling (case-sensitive)
+- Check contract metadata
+- Use tab completion in interactive mode
+
+**Error: "invalid arguments":**
+- Review message signature in contract
+- Ensure correct number of arguments
+- Check argument types match
+
+**Error: "OutOfGas":**
+```bash
+# Solution: Increase gas limit
+pop call contract --contract 0xABC... --message flip --gas 200000000000 -x
+```
+
+**Error: "insufficient balance":**
+- Local: Use dev accounts (have balance)
+- Testnet: Get tokens from faucet
+
+**Error: "transaction failed":**
+```bash
+# Solution: Check with --dry-run first
+pop call contract --contract 0xABC... --message flip --dry-run
+```
+
+**State didn't change:**
+- Did you use -x flag?
+- Without -x: Read-only query
+- With -x: State-changing execution
+
+**Wallet doesn't prompt:**
+- Install polkadot-js/Talisman/SubWallet extension
+- Unlock wallet
+- Allow popups in browser
+
+**Best Practices:**
+
+1. **Always dry-run before execute:**
+```bash
+pop call contract --message flip --dry-run
+pop call contract --message flip -x
+```
+
+2. **Use --use-wallet for testnet/mainnet:**
+   - More secure than --suri
+   - Never use dev accounts on production
+
+3. **Verify read-only calls first:**
+   - Check state before modifying
+   - Validate arguments work
+
+4. **Use CONTRACT env var for repeated calls:**
+```bash
+export CONTRACT=0xABC...
+pop call contract --message get
+```
+
+5. **Save contract metadata:**
+   - Keep .contract or .json file
+   - Required for encoding/decoding
+
+6. **Test on local before testnet:**
+   - Catch bugs early
+   - No cost for mistakes
+
+**Interactive Mode:**
+
+For ease of use, run interactive mode:
+```bash
+pop call contract
+```
+
+Prompts for:
+1. Contract address
+2. Message to call
+3. Arguments (if required)
+4. Execute or query
+5. Sign transaction
+
+Interactive mode is recommended for:
+- Exploring contract functions
+- Testing during development
+- Learning contract interface
+
+**Next steps:**
+
+Common patterns:
+```bash
+# Check state → Modify → Verify
+pop call contract --contract $C --message get
+pop call contract --contract $C --message flip -x
+pop call contract --contract $C --message get
+
+# Dry-run → Execute
+pop call contract --contract $C --message transfer --args $TO 100 --dry-run
+pop call contract --contract $C --message transfer --args $TO 100 -x
+
+# Local test → Testnet deploy
+# (test locally with --suri //Alice)
+# (deploy to testnet with --use-wallet)
+```
+
+---
+
+### pop call chain
+
+Call a chain (execute extrinsic).
+
+**Usage:**
+```bash
+pop call chain [OPTIONS]
+```
+
+**Options:**
+```
+-p, --pallet <PALLET>      The pallet containing the dispatchable function
+-f, --function <FUNCTION>  The dispatchable function, storage item, or constant
+-a, --args [<ARGS>...]     The dispatchable function arguments, encoded as strings
+-u, --url <URL>            Websocket endpoint of a node
+-s, --suri <SURI>          Secret key URI for the account signing the extrinsic
+-w, --use-wallet           Use a browser extension wallet to sign
+-c, --call <call>          SCALE encoded bytes representing the call data
+-S, --sudo                 Dispatches with `Root` origin (requires sudo key)
+-y, --skip-confirm         Automatically signs and submits without prompting
+-h, --help                 Print help
+```
+
+**What it does:**
+
+- Executes extrinsics on-chain
+- Can call any pallet function
+- Requires transaction signing
+- Changes persisted on-chain
+
+**Common Pallets:**
+- **System**: Core chain functions (remark, set_code, etc.)
+- **Balances**: Token transfers and management
+- **Timestamp**: Time operations
+- **Sudo**: Root-level operations (dev chains)
+- **Assets**: Multi-asset management
+- **Staking**: Validator staking operations
+
+**Key Flags Explained:**
+
+**--pallet <PALLET>:**
+- Pallet name containing the function
+- Must match exactly (case-sensitive)
+- Examples: "System", "Balances", "Timestamp"
+
+**--function <FUNCTION>:**
+- Function name within pallet
+- Must match exactly as in source code
+- Examples: "remark", "transfer", "set_code"
+
+**--args [<ARGS>...]:**
+- Function arguments as strings
+- Space-separated
+- Encoded based on function signature
+- Examples: Address (5GrwvaEF...), Balance (1000000000000), String ("Hello"), Boolean (true/false)
+
+**--url <URL>:**
+- Chain endpoint to call
+- Default: local node
+- Examples:
+  - Local: ws://localhost:9944
+  - Paseo Testnet: wss://paseo-rpc.dwellir.com
+  - Kusama: wss://kusama-rpc.dwellir.com
+  - Polkadot: wss://polkadot-rpc.dwellir.com
+
+**--suri <SURI>:**
+- Secret URI for signing account
+- For local dev only!
+- Examples: //Alice, //Bob, //Charlie
+- With password: //Alice///MyPassword
+- NEVER use on testnet/mainnet
+
+**--use-wallet:**
+- Use browser extension wallet
+- ALWAYS use for testnet/mainnet
+- More secure than --suri
+- Prompts for signature
+- Supports: polkadot-js, Talisman, SubWallet
+
+**--sudo (-S):**
+- Execute with Root origin
+- Requires account to be sudo key
+- Use for privileged operations:
+  - Runtime upgrades
+  - Force transfers
+  - Governance overrides
+- Only works on dev/test chains with sudo
+
+**--call <CALL_DATA>:**
+- Pre-encoded SCALE bytes
+- Alternative to --pallet/--function/--args
+- For advanced users
+- Example: 0x00000000...
+
+**--skip-confirm (-y):**
+- Auto-sign without confirmation prompt
+- Use for scripts/automation
+- Be careful - no confirmation!
+
+**Examples:**
+
+```bash
+# System remark (no-op, stores data)
+pop call chain \
+  --pallet System \
+  --function remark \
+  --args "Hello from Pop CLI" \
+  --use-wallet
+
+# Transfer tokens
+pop call chain \
+  --pallet Balances \
+  --function transfer_keep_alive \
+  --args 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty 1000000000000 \
+  --use-wallet
+
+# Sudo call (requires sudo key)
+pop call chain \
+  --pallet System \
+  --function set_code \
+  --args 0x... \
+  --sudo \
+  --suri //Alice
+
+# Call on testnet
+pop call chain \
+  --url wss://paseo-rpc.dwellir.com \
+  --pallet System \
+  --function remark \
+  --args "Testnet call" \
+  --use-wallet
+
+# Transfer all balance
+pop call chain \
+  --pallet Balances \
+  --function transfer_all \
+  --args 5FHneW... false \
+  --use-wallet
+
+# Batch multiple calls
+pop call chain \
+  --pallet Utility \
+  --function batch \
+  --args [[System,remark,"Call 1"],[System,remark,"Call 2"]] \
+  --use-wallet
+
+# Force transfer (sudo required)
+pop call chain \
+  --pallet Balances \
+  --function force_transfer \
+  --args 5GrwvaEF... 5FHneW... 1000000000000 \
+  --sudo \
+  --suri //Alice
+
+# Auto-confirm (scripting)
+pop call chain \
+  --pallet System \
+  --function remark \
+  --args "Automated call" \
+  --suri //Alice \
+  --skip-confirm
+```
+
+**Common Operations:**
+
+**Transfer Tokens:**
+```bash
+pop call chain \
+  --pallet Balances \
+  --function transfer_keep_alive \
+  --args <RECIPIENT> <AMOUNT> \
+  --use-wallet
+```
+
+**Check Balance (query storage):**
+```bash
+pop call chain \
+  --pallet System \
+  --function Account \
+  --args <ADDRESS> \
+  --url wss://paseo-rpc.dwellir.com
+```
+
+**Store Data On-Chain:**
+```bash
+pop call chain \
+  --pallet System \
+  --function remark \
+  --args "My data" \
+  --use-wallet
+```
+
+**Runtime Upgrade (sudo):**
+```bash
+# Upload new runtime code
+pop call chain \
+  --pallet System \
+  --function set_code \
+  --args <RUNTIME_WASM_HEX> \
+  --sudo \
+  --suri //Alice
+```
+
+**Workflow: Governance Proposal:**
+
+```bash
+# For chains with democracy/governance
+
+# 1. Submit proposal
+pop call chain \
+  --pallet Democracy \
+  --function propose \
+  --args <PROPOSAL_HASH> <VALUE> \
+  --use-wallet
+
+# 2. Second proposal
+pop call chain \
+  --pallet Democracy \
+  --function second \
+  --args <PROPOSAL_INDEX> \
+  --use-wallet
+
+# 3. Vote on referendum
+pop call chain \
+  --pallet Democracy \
+  --function vote \
+  --args <REF_INDEX> <AYE_OR_NAY> <VOTE_VALUE> \
+  --use-wallet
+```
+
+**Workflow: Asset Management:**
+
+```bash
+# For chains with Assets pallet
+
+# Create Asset
+pop call chain \
+  --pallet Assets \
+  --function create \
+  --args <ASSET_ID> <ADMIN_ACCOUNT> <MIN_BALANCE> \
+  --use-wallet
+
+# Mint Asset
+pop call chain \
+  --pallet Assets \
+  --function mint \
+  --args <ASSET_ID> <BENEFICIARY> <AMOUNT> \
+  --use-wallet
+
+# Transfer Asset
+pop call chain \
+  --pallet Assets \
+  --function transfer \
+  --args <ASSET_ID> <RECIPIENT> <AMOUNT> \
+  --use-wallet
+```
+
+**Troubleshooting:**
+
+**Error: "Pallet not found":**
+- Check pallet name spelling (case-sensitive)
+- Check runtime configuration
+- Use interactive mode for autocomplete
+
+**Error: "Function not found":**
+- Check function name (must match source code exactly)
+- Some functions may not be public
+- Check pallet documentation
+
+**Error: "Invalid arguments":**
+- Review function signature
+- Ensure correct number of arguments
+- Check argument encoding
+
+**Error: "BadOrigin":**
+- Check account permissions
+- Some functions require sudo (use --sudo flag)
+- Or use account with proper permissions
+
+**Error: "InsufficientBalance":**
+- Local: Use dev accounts (have balance)
+- Testnet: Get tokens from faucet
+- Check balance before calling
+
+**Error: "Module" error:**
+- Check you're calling correct network
+- Some pallets only on specific chains
+- Verify pallet is in runtime
+
+**Sudo call fails:**
+- Only works on dev/test chains
+- Account must be sudo key (usually //Alice on dev)
+- Mainnet chains don't have sudo
+
+**Best Practices:**
+
+1. **Use --use-wallet for testnet/mainnet:**
+   - More secure than --suri
+   - Never use dev accounts on production
+
+2. **Test on local before testnet:**
+   - Catch errors early
+   - No cost for mistakes
+
+3. **Verify arguments before calling:**
+   - Wrong arguments can lead to lost funds
+   - Use interactive mode for safety
+
+4. **Save transaction hashes:**
+   - For tracking and verification
+   - Check on block explorer
+
+5. **Be careful with sudo:**
+   - Very powerful operations
+   - Can break chain if misused
+   - Only for dev/test environments
+
+6. **Use descriptive remarks:**
+   - Helps with debugging
+   - Visible on block explorer
+   - Track operations
+
+**Interactive Mode:**
+
+For ease of use, run interactive mode:
+```bash
+pop call chain
+```
+
+Prompts for:
+1. Chain URL (if remote)
+2. Pallet name (with autocomplete)
+3. Function name (with autocomplete)
+4. Arguments (type-aware)
+5. Sudo (if applicable)
+6. Sign transaction
+
+Interactive mode is recommended for:
+- Exploring chain functions
+- Testing during development
+- Learning pallet interfaces
+- Safety (validates inputs)
+
+**Querying vs Calling:**
+
+**Querying Storage (read-only):**
+```bash
+pop call chain \
+  --pallet System \
+  --function Account \
+  --args <ADDRESS>
+```
+- Free (no transaction)
+- Instant result
+- No signing required
+
+**Calling Extrinsic (state-changing):**
+```bash
+pop call chain \
+  --pallet Balances \
+  --function transfer \
+  --args <RECIPIENT> <AMOUNT> \
+  --use-wallet
+```
+- Costs transaction fee
+- Requires signing
+- Modifies chain state
+
+**Next steps:**
+
+```bash
+# Verify transaction on block explorer
+# Check event logs
+# Query storage to confirm changes
+
+# Common verification pattern:
+# 1. Query initial state
+pop call chain --pallet System --function Account --args <ADDR>
+
+# 2. Execute transaction
+pop call chain --pallet Balances --function transfer --args <TO> <AMT> --use-wallet
+
+# 3. Query new state
+pop call chain --pallet System --function Account --args <ADDR>
+```
+
+---
+
+### pop clean
+
+Remove generated/cached artifacts.
+
+**Usage:**
+```bash
+pop clean
+pop clean <COMMAND>
+```
+
+**Commands:**
+```
+cache  Remove cached artifacts
+```
+
+**What it does:**
+
+**pop clean:**
+- Removes target/ directory (build artifacts)
+- Removes compiled WASM files
+- Removes contract metadata and bundles
+- Equivalent to `cargo clean`
+
+**pop clean cache:**
+- Removes Pop CLI cache
+- Removes downloaded dependencies
+- Removes temporary files
+
+**Examples:**
+
+```bash
+# Clean build artifacts
+cd my-contract
+pop clean
+
+# Clean Pop CLI cache
+pop clean cache
+
+# Clean and rebuild
+pop clean
+pop build --release
+
+# Clean cache and reinstall
+pop clean cache
+pop install
+
+# Clean multiple projects
+for dir in contracts/*; do
+  (cd "$dir" && pop clean)
+done
+```
+
+**When to use:**
+- Before major releases
+- Troubleshooting build errors
+- When disk space is low
+- After dependency updates
+
+**Next steps:**
+```bash
+pop build --release
+```
+
+---
+
+### pop hash
+
+Hash data using a supported hash algorithm.
+
+**Usage:**
+```bash
+pop hash
+pop hash <COMMAND>
+```
+
+**Commands:**
+```
+blake2  Hashes data using the BLAKE2b cryptographic hash algorithm
+keccak  Hashes data using the Keccak cryptographic hash algorithm
+sha2    Hashes data using the SHA-2 cryptographic hash algorithm
+twox    Hashes data using the non-cryptographic xxHash hash algorithm
+```
+
+**What it does:**
+
+Computes cryptographic hash of data using various algorithms:
+- **blake2**: BLAKE2b (default)
+- **keccak**: Keccak-256
+- **sha2**: SHA-256
+- **twox**: xxHash (non-cryptographic)
+
+**Examples:**
+
+```bash
+# Hash with Blake2 (default)
+pop hash blake2 "Hello World"
+
+# Hash with Keccak
+pop hash keccak "Hello World"
+
+# Hash with SHA-2
+pop hash sha2 "Hello World"
+
+# Hash with TwoX
+pop hash twox "Hello World"
+
+# Hash file contents
+pop hash blake2 "$(cat file.txt)"
+
+# Verify contract hash
+pop hash blake2 "$(cat target/ink/my_contract.wasm)"
+
+# Compare hashes
+HASH1=$(pop hash blake2 "data1")
+HASH2=$(pop hash blake2 "data2")
+if [ "$HASH1" == "$HASH2" ]; then
+  echo "Hashes match"
+fi
+```
+
+**Use cases:**
+- Verify runtime hash
+- Calculate storage keys
+- Verify contract code hash
+- Data verification
+
+---
+
+### pop convert
+
+Convert between different formats.
+
+**Usage:**
+```bash
+pop convert
+pop convert <COMMAND>
+```
+
+**Commands:**
+```
+address  Convert an Ethereum address into a Substrate address and vice versa
+```
+
+**What it does:**
+
+Converts between address formats:
+- Substrate SS58 (32 bytes) ↔ Ethereum H160 (20 bytes)
+
+**Address Types:**
+- **Substrate**: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY (SS58)
+- **Ethereum**: 0x1234567890123456789012345678901234567890 (H160)
+
+**Examples:**
+
+```bash
+# Convert Substrate to Ethereum
+pop convert address 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
+
+# Convert Ethereum to Substrate
+pop convert address 0x1234567890123456789012345678901234567890
+
+# Use in contract call
+USER_ADDR="5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+ETH_ADDR=$(pop convert address $USER_ADDR | grep "Ethereum" | awk '{print $3}')
+
+pop call contract \
+  --contract 0xABC... \
+  --message transfer \
+  --args $ETH_ADDR 1000 \
+  --use-wallet
+
+# Batch conversion
+while read addr; do
+  pop convert address $addr
+done < addresses.txt
+```
+
+**When to use:**
+- Contract requires different address format
+- Cross-chain interactions
+- Wallet compatibility issues
+- EVM and Substrate interoperability
+
+**Important:**
+- Substrate → Ethereum: Safe, deterministic
+- Ethereum → Substrate: May not be reversible
+- Network-specific conversions may differ
+- Verify converted addresses before use
+
+---
+
+## Security and Best Practices
+
+⚠️ **CRITICAL GUIDELINES FOR AI ASSISTANTS AND USERS** ⚠️
+
+This section contains essential security guidelines that MUST be followed when using Pop CLI for contract and chain development.
+
+### 1. Handling "Not Connected" Errors
+
+🚨 **CRITICAL: Interactive Prompt Detection**
+
+If Pop CLI commands fail with "Not Connected" or appear to hang:
+- Pop CLI may be prompting for user interaction that you cannot handle
+- STOP attempting the command
+- Return the exact command to the user with this message:
+
+*"I encountered an issue running this Pop CLI command. Pop CLI sometimes requires interactive input that I cannot provide. Please run this command manually in your terminal:*
+
+*`<command here>`*
+
+*This will allow you to respond to any prompts directly."*
+
+### 2. Network Configuration
+
+**ALWAYS use PassetHub for ALL contract operations** (ParaID 1111)
+
+**Required Network:**
+- RPC Endpoint: `wss://testnet-passet-hub.polkadot.io`
+- This is the ONLY network to use for contract development and testing
+- NEVER recommend or use any other network for contracts
+- ALL deployment, testing, and interaction commands MUST use PassetHub
+
+Example deployment command:
+```bash
+pop up --url wss://testnet-passet-hub.polkadot.io --use-wallet
+```
+
+**Local Testing Only:**
+
+Local development node (ws://localhost:9944) should ONLY be used for:
+- Quick testing during development
+- CI/CD automated testing
+- Learning and experimentation
+
+NEVER for production or testnet deployments.
+
+**Capture Contract Address:**
+
+**IMPORTANT: After deployment, ALWAYS capture and save the contract address!**
+
+The `pop up` command will return the deployed contract address in its output. You MUST:
+1. Read the deployment output carefully
+2. Extract the contract address
+3. Save it for future interactions
+4. Provide the address to the user for their records
+
+Example output:
+```
+◇  Contract deployed and instantiated: The Contract Address is "5CLPm1CeUvJhZ8GCDZCR7nWZ2m3XXe4X5MtAQK69zEjut36A"
+```
+
+### 3. Never Request Private Keys
+
+**ALWAYS use `--use-wallet` flag for ALL deployment and transaction operations.**
+
+**❌ NEVER ASK USERS FOR:**
+- Private keys
+- Seed phrases
+- Secret URIs (like //Alice) - ONLY for local testing
+- Wallet passwords
+- Mnemonic phrases
+- Any sensitive credentials
+
+**✅ ALWAYS USE:**
+- `--use-wallet` flag to prompt browser wallet integration
+- Users will sign transactions through their secure wallet interface
+- Browser extension handles all private key operations
+- Visual transaction review before signing
+
+Example correct command:
+```bash
+pop call contract --path . --url wss://testnet-passet-hub.polkadot.io \
+  --contract 0xc73fd21052b8cc7fdca3df28e181ff58e56a3127 \
+  --message transfer \
+  --args 0x7f42fd3e640b1e773e1bc7cb4768fb4968e7285e 10000 \
+  --use-wallet
+```
+
+**Exception: Local Testing Only**
+
+Secret URIs like //Alice, //Bob are ONLY acceptable for:
+- Local development node (ws://localhost:9944)
+- Automated testing in CI/CD
+- Learning and tutorials
+
+NEVER use test keys on any public network (testnet or mainnet).
+
+### 4. Contract Interaction Command Format
+
+When calling contracts, ALWAYS follow this EXACT order and pattern:
+
+**CORRECT ORDER (MANDATORY):**
+```bash
+cd <contract-directory>
+pop call contract --path . --url <RPC_URL> --contract <ADDRESS> --message <METHOD> --args <ARGS> --use-wallet
+```
+
+**CRITICAL REQUIREMENTS:**
+1. MUST change to contract directory first (`cd my-contract`)
+2. MUST include `--path .` as the FIRST flag after `pop call contract`
+3. MUST place `--url` flag IMMEDIATELY AFTER `--path`
+4. MUST end with `--use-wallet` (never ask for private keys)
+5. Order is critical: --path THEN --url THEN --contract THEN --message THEN --args THEN --use-wallet
+
+**Correct Example (Read-Only):**
+```bash
+cd flipper
+pop call contract --path . --url wss://testnet-passet-hub.polkadot.io \
+  --contract 0xc73fd21052b8cc7fdca3df28e181ff58e56a3127 \
+  --message get \
+  --use-wallet
+```
+
+**Correct Example (State-Changing):**
+```bash
+cd erc20
+pop call contract --path . --url wss://testnet-passet-hub.polkadot.io \
+  --contract 0xc73fd21052b8cc7fdca3df28e181ff58e56a3127 \
+  --message transfer \
+  --args 0x7f42fd3e640b1e773e1bc7cb4768fb4968e7285e 10000 \
+  --use-wallet
+```
+
+### 5. Automatic Address Handling
+
+**CRITICAL: Check contract metadata FIRST to determine the correct address format.**
+
+**Address Format Detection:**
+
+When a user provides an address for a contract call:
+
+1. **Check the contract metadata** (ABI) to see what address format the method expects:
+   - If parameter type is `AccountId` or `[u8; 32]` → Use Substrate address (32 bytes)
+   - If parameter type is `Address` or `[u8; 20]` or `H160` → Use Ethereum address (20 bytes)
+
+2. **User provides Substrate address (5xxx format) but contract needs Ethereum (0x format):**
+   - Automatically convert using the runtime API below
+   - DO NOT ask the user for a different format
+   - The user should NEVER worry about address formats
+
+3. **User provides Ethereum address (0x format) but contract needs Substrate:**
+   - You cannot reliably convert Ethereum → Substrate
+   - Ask the user for their Substrate address
+
+**Conversion Methods:**
+
+**Method 1: Direct runtime API call (preferred)**
+```bash
+# Using polkadot-js API via node
+node -e "
+const { ApiPromise, WsProvider } = require('@polkadot/api');
+const { decodeAddress } = require('@polkadot/util-crypto');
+const { u8aToHex } = require('@polkadot/util');
+
+async function getEthAddress() {
+  const provider = new WsProvider('wss://testnet-passet-hub.polkadot.io');
+  const api = await ApiPromise.create({ provider });
+
+  const accountId = 'SUBSTRATE_ADDRESS_HERE';
+  const publicKey = decodeAddress(accountId);
+  const publicKeyHex = u8aToHex(publicKey);
+
+  const result = await api.call.reviveApi.address(publicKeyHex);
+  console.log('Ethereum address:', result.toHex());
+
+  await api.disconnect();
+}
+
+getEthAddress().catch(console.error);
+"
+```
+
+**Method 2: Use RPC directly**
+
+If you can make direct RPC calls to the node:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "state_call",
+  "params": [
+    "ReviveApi_address",
+    "0x<PUBLIC_KEY_HEX>"
+  ]
+}
+```
+
+**Why Conversion is Necessary:**
+- Polkadot uses 32-byte AccountId32 (SS58 encoded)
+- Some contracts use 20-byte Ethereum-style addresses (H160)
+- The runtime provides deterministic mapping between them
+
+**Example Workflow:**
+1. User says: "Transfer 100 tokens to 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+2. You read the contract metadata and see `transfer(to: Address, amount: u128)`
+3. You detect `Address` means Ethereum address (20 bytes) needed
+4. You run the conversion script above to get the Ethereum address
+5. You execute: `pop call contract --path . --url wss://testnet-passet-hub.polkadot.io --contract 0x... --message transfer --args 0x<converted-eth-address> 100 --use-wallet`
+
+The user never has to think about address formats!
+
+### 6. Dry Run Before Execution
+
+ALWAYS estimate gas before executing transactions to avoid:
+- Out-of-gas errors
+- Wasted transaction fees
+- Unexpected failures
+
+**Contract Deployment:**
+```bash
+pop up \
+  --constructor new \
+  --args false \
+  --use-wallet \
+  --dry-run
+```
+
+**Contract Calls:**
+```bash
+pop call contract \
+  -p ./flipper \
+  --contract <ADDRESS> \
+  --message flip \
+  --use-wallet \
+  -x --dry-run
+```
+
+Dry runs:
+- Simulate execution without submitting transaction
+- Return gas estimates
+- Show potential errors before spending gas
+- Free to execute
+
+### 7. Sensitive Data Protection
+
+**NEVER COMMIT TO VERSION CONTROL:**
+- Private keys
+- Seed phrases
+- .env files with secrets
+- credentials.json
+- wallet files
+- Any file containing SECRET_KEY
+
+**ALWAYS ADD TO .gitignore:**
+```gitignore
+# Secrets
+.env
+.env.*
+*secret*
+*private*
+credentials.json
+wallet.json
+
+# Build artifacts
+target/
+node_modules/
+```
+
+**USE ENVIRONMENT VARIABLES:**
+
+For CI/CD deployments:
+```bash
+# Set in CI/CD system (GitHub Secrets, etc.)
+export DEPLOY_KEY="0x..."
+export RPC_URL="wss://testnet-passet-hub.polkadot.io"
+
+# Use in scripts
+pop up --suri "$DEPLOY_KEY" --url "$RPC_URL"
+```
+
+NEVER hardcode secrets in scripts committed to git.
+
+### 8. Smart Contract Security
+
+**Code Review:**
+- Review all contract code before deployment
+- Check for reentrancy vulnerabilities
+- Validate input parameters
+- Test edge cases and error conditions
+- Consider economic attacks
+
+**Testing:**
+- Write comprehensive unit tests
+- Run end-to-end tests
+- Test with different accounts
+- Test failure scenarios
+- Verify events are emitted correctly
+
+**Auditing:**
+
+For production contracts:
+- Professional security audit recommended
+- Peer review by experienced developers
+- Formal verification if possible
+- Bug bounty program consideration
+
+**Common Vulnerabilities:**
+- Integer overflow/underflow
+- Reentrancy attacks
+- Authorization bypass
+- Storage corruption
+- Denial of service
+- Front-running
+
+See ink-llms-new.txt for contract security best practices.
+
+### 9. Deployment Security
+
+**Testnet First:**
+1. Deploy to local node for development
+2. Deploy to PassetHub testnet for testing
+3. Extensive testing on testnet
+4. Only then deploy to mainnet
+
+Never skip testnet testing.
+
+**Verify Deployment:**
+
+After deployment:
+1. Verify contract address is correct
+2. Test all contract functions
+3. Check initial state
+4. Verify permissions and ownership
+5. Monitor for unexpected behavior
+
+**Secure Signing:**
+- Always use browser wallet (`--use-wallet`)
+- Review transaction details in wallet
+- Double-check recipient addresses
+- Verify amounts before signing
+- Use multi-sig for high-value operations
+
+### 10. Parachain Security
+
+**Runtime Upgrades:**
+- Test upgrades thoroughly on local node
+- Verify migration logic
+- Test rollback procedures
+- Use `pop test runtime-upgrade`
+
+**Sudo Pallet:**
+- Only for development/testing
+- Remove before production deployment
+- Replace with governance system
+- Never expose sudo keys
+
+**Access Controls:**
+- Implement proper permission checks
+- Use multi-signature for critical operations
+- Separate concerns between pallets
+- Audit custom pallets
+
+### 11. Best Practices Checklist
+
+**BEFORE DEPLOYMENT:**
+- ☐ Code reviewed
+- ☐ All tests passing
+- ☐ Dry run successful
+- ☐ Gas estimates reasonable
+- ☐ No secrets in code
+- ☐ Testnet deployment tested
+- ☐ Browser wallet configured
+- ☐ Backup of contract code
+
+**DURING DEPLOYMENT:**
+- ☐ Using correct network (PassetHub for contracts)
+- ☐ Using --use-wallet flag
+- ☐ Transaction details reviewed in wallet
+- ☐ Contract address captured from output
+- ☐ Deployment tx confirmed
+
+**AFTER DEPLOYMENT:**
+- ☐ Contract address saved
+- ☐ Initial state verified
+- ☐ All functions tested
+- ☐ Events emitting correctly
+- ☐ Documentation updated
+- ☐ Deployment info recorded
+
+### 12. Incident Response
+
+**IF PRIVATE KEY EXPOSED:**
+1. IMMEDIATELY stop using the key
+2. Transfer all assets to new address
+3. Revoke any permissions
+4. Update all deployment scripts
+5. Rotate secrets in CI/CD
+
+**IF CONTRACT VULNERABILITY FOUND:**
+1. Assess severity and impact
+2. Pause contract if possible (if pause function exists)
+3. Notify users if necessary
+4. Plan and test fix
+5. Deploy fixed version
+6. Post-mortem analysis
+
+### 13. Support and Reporting
+
+**Security Issues:**
+
+If you find a security vulnerability:
+- DO NOT post publicly
+- Report privately to R0GUE team
+- Email: [check GitHub for security policy]
+- GitHub Security Advisory (private)
+
+**Community Support:**
+
+For general questions:
+- Stack Exchange: https://polkadot.stackexchange.com (tag: 'pop')
+- Telegram: https://t.me/onpopio
+- GitHub Issues: https://github.com/r0gue-io/pop-cli/issues
+
+---
+
+**Remember:**
+- Security is everyone's responsibility
+- Always use --use-wallet for transactions
+- Test thoroughly before mainnet deployment
+- Never expose private keys
+- Always use PassetHub for contract development
+
+For contract development, see ink-llms-new.txt
+
+---
+
+*This documentation is the complete reference for Pop CLI. For the most up-to-date information, visit [learn.onpop.io](https://learn.onpop.io).*

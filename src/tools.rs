@@ -11,31 +11,69 @@ use rmcp::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 pub struct PopMcpServer {
     tool_router: ToolRouter<Self>,
+    node_websocket_url: Arc<Mutex<Option<String>>>,
+    node_pids: Arc<Mutex<Option<String>>>,
 }
 
 impl PopMcpServer {
     pub fn new() -> Self {
         Self {
             tool_router: Self::tool_router(),
+            node_websocket_url: Arc::new(Mutex::new(None)),
+            node_pids: Arc::new(Mutex::new(None)),
         }
     }
 
     fn execute_pop_command(args: &[&str]) -> Result<String, String> {
         match Command::new("pop").args(args).output() {
             Ok(output) => {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
                 if output.status.success() {
-                    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+                    // Pop CLI writes most output to stderr, not stdout
+                    // Build combined output
+                    let mut result = String::new();
+
+                    if !stderr.is_empty() {
+                        result.push_str(&stderr);
+                    }
+
+                    if !stdout.is_empty() {
+                        if !result.is_empty() {
+                            result.push_str("\n\n");
+                        }
+                        result.push_str(&stdout);
+                    }
+
+                    if result.is_empty() {
+                        Ok("(Command succeeded but produced no output)".to_string())
+                    } else {
+                        Ok(result)
+                    }
                 } else {
-                    Err(String::from_utf8_lossy(&output.stderr).to_string())
+                    let mut error = String::new();
+                    if !stderr.is_empty() {
+                        error.push_str(&stderr);
+                    }
+                    if !stdout.is_empty() {
+                        if !error.is_empty() {
+                            error.push_str("\n\n");
+                        }
+                        error.push_str(&stdout);
+                    }
+                    Err(error)
                 }
             }
             Err(e) => Err(format!("Failed to execute pop command: {}", e)),
         }
     }
+
 
     fn success(text: impl Into<String>) -> CallToolResult {
         CallToolResult::success(vec![Content::text(text.into())])
@@ -146,22 +184,18 @@ pub struct ListTemplatesParams {}
 
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct CreateContractParams {
-    #[schemars(description = "Name of the contract project")]
+    #[schemars(description = "Name of the contract project (alphanumeric characters and underscores only)")]
     name: String,
     #[schemars(description = "Template to use (standard, erc20, erc721, erc1155, dns, cross-contract-calls, multisig)")]
     template: String,
-    #[schemars(description = "Directory path where to create the contract")]
-    path: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct CreateContractWithFrontendParams {
-    #[schemars(description = "Name of the contract project")]
+    #[schemars(description = "Name of the contract project (alphanumeric characters and underscores only)")]
     name: String,
     #[schemars(description = "Template to use (standard, erc20, erc721, erc1155, dns, cross-contract-calls, multisig)")]
     template: String,
-    #[schemars(description = "Directory path where to create the contract")]
-    path: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]
@@ -184,43 +218,42 @@ pub struct TestContractParams {
 
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct DeployContractParams {
-    #[schemars(description = "Path to the contract directory or .contract bundle")]
+    #[schemars(description = "Path to the contract directory (e.g., './my_contract' or 'my_contract')")]
     path: String,
     #[schemars(description = "Constructor function to call")]
     constructor: Option<String>,
     #[schemars(description = "Constructor arguments as space-separated values")]
     args: Option<String>,
+    #[schemars(description = "Initial balance to transfer to the contract (in tokens)")]
+    value: Option<String>,
+    #[schemars(description = "Submit an extrinsic for on-chain execution")]
+    execute: Option<bool>,
     #[schemars(description = "Secret key URI for signing")]
     suri: Option<String>,
     #[schemars(description = "WebSocket URL of the node")]
     url: Option<String>,
-    #[schemars(description = "Only upload code without instantiating")]
-    upload_only: Option<bool>,
-    #[schemars(description = "Perform a dry run without submitting")]
-    dry_run: Option<bool>,
 }
 
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct CallContractParams {
+    #[schemars(description = "Path to the contract directory (needed for contract metadata)")]
+    path: String,
     #[schemars(description = "Contract address")]
     contract: String,
     #[schemars(description = "Message/method to call")]
     message: String,
     #[schemars(description = "Method arguments as space-separated values")]
     args: Option<String>,
+    #[schemars(description = "Value to transfer with the call (in tokens)")]
+    value: Option<String>,
+    #[schemars(description = "Submit an extrinsic for on-chain execution")]
+    execute: Option<bool>,
     #[schemars(description = "Secret key URI for signing")]
     suri: Option<String>,
     #[schemars(description = "WebSocket URL of the node")]
     url: Option<String>,
-    #[schemars(description = "Perform a dry run without submitting")]
-    dry_run: Option<bool>,
 }
 
-#[derive(Deserialize, Serialize, JsonSchema)]
-pub struct GetContractInfoParams {
-    #[schemars(description = "Path to the contract directory or .contract file")]
-    path: String,
-}
 
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct CleanContractParams {
@@ -228,6 +261,21 @@ pub struct CleanContractParams {
     path: String,
 }
 
+#[derive(Deserialize, Serialize, JsonSchema)]
+pub struct LaunchInkNodeParams {}
+
+#[derive(Deserialize, Serialize, JsonSchema)]
+pub struct StopInkNodeParams {
+    #[schemars(description = "Process IDs to kill (space-separated). If not provided, will use PIDs from the last launched ink-node")]
+    pids: Option<String>,
+}
+
+
+// ============================================================================
+// COMMENTED OUT: Chain/Parachain/Pallet Tools (moved to bottom of file)
+// ============================================================================
+
+/*
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct CreateParachainParams {
     #[schemars(description = "Name of the parachain project")]
@@ -291,6 +339,7 @@ pub struct BenchmarkPalletParams {
     #[schemars(description = "Path to runtime WASM file")]
     runtime: Option<String>,
 }
+*/
 
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct PopHelpParams {
@@ -308,9 +357,9 @@ pub struct SearchDocumentationParams {
 
 #[derive(Deserialize, Serialize, JsonSchema)]
 pub struct ConvertAddressParams {
-    #[schemars(description = "The Substrate or Ethereum address to convert")]
+    #[schemars(description = "The Substrate or Ethereum address to convert (supports SS58 format or raw 32-byte hex)")]
     address: String,
-    #[schemars(description = "The SS58 prefix for Substrate addresses (defaults to 0 for Polkadot)")]
+    #[schemars(description = "Optional SS58 prefix for Substrate addresses (defaults to 0, may be deprecated in future as ecosystem is unified with prefix 0)")]
     prefix: Option<u16>,
 }
 
@@ -333,7 +382,7 @@ impl PopMcpServer {
     ) -> Result<CallToolResult, McpError> {
         match Self::execute_pop_command(&["--version"]) {
             Ok(output) => Ok(Self::success(format!("✅ Pop CLI is installed!\n\n{}", output))),
-            Err(e) => Ok(Self::success(format!(
+            Err(e) => Ok(Self::error(format!(
                 "❌ Pop CLI is not installed.\n\nError: {}\n\nTo install Pop CLI, use the install_pop_instructions tool.",
                 e
             ))),
@@ -410,14 +459,14 @@ Available ink! Contract Templates:\n\n\
         &self,
         Parameters(params): Parameters<CreateContractParams>,
     ) -> Result<CallToolResult, McpError> {
-        let mut args = vec!["new", "contract", &params.name, "--template", &params.template];
-
-        let path_storage;
-        if let Some(ref path) = params.path {
-            path_storage = path.clone();
-            args.push("--path");
-            args.push(&path_storage);
+        // Validate contract name (only alphanumeric and underscores)
+        if !params.name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            return Ok(Self::error(
+                "❌ Invalid contract name. Contract names can only contain alphanumeric characters and underscores.".to_string()
+            ));
         }
+
+        let args = vec!["new", "contract", &params.name, "--template", &params.template];
 
         match Self::execute_pop_command(&args) {
             Ok(output) => Ok(Self::success(format!(
@@ -433,18 +482,15 @@ Available ink! Contract Templates:\n\n\
         &self,
         Parameters(params): Parameters<CreateContractWithFrontendParams>,
     ) -> Result<CallToolResult, McpError> {
-        // Step 1: Create the contract with typink frontend
-        let mut args = vec!["new", "contract", &params.name, "--template", &params.template, "--with-frontend=typink"];
+        // Validate contract name (only alphanumeric and underscores)
+        if !params.name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            return Ok(Self::error(
+                "❌ Invalid contract name. Contract names can only contain alphanumeric characters and underscores.".to_string()
+            ));
+        }
 
-        let path_storage;
-        let base_path = if let Some(ref path) = params.path {
-            path_storage = path.clone();
-            args.push("--path");
-            args.push(&path_storage);
-            path.clone()
-        } else {
-            ".".to_string()
-        };
+        // Step 1: Create the contract with typink frontend
+        let args = vec!["new", "contract", &params.name, "--template", &params.template, "--with-frontend=typink"];
 
         // Execute pop command to create contract
         let create_result = match Self::execute_pop_command(&args) {
@@ -453,7 +499,7 @@ Available ink! Contract Templates:\n\n\
         };
 
         // Step 2: Adapt the frontend to the actual contract template using Dedot docs
-        let contract_path = format!("{}/{}", base_path, params.name);
+        let contract_path = &params.name;
         let frontend_path = format!("{}/frontend", contract_path);
 
         let adaptation_result = Self::adapt_frontend_to_contract(&params.template, &frontend_path, &params.name).await;
@@ -517,7 +563,8 @@ Available ink! Contract Templates:\n\n\
         &self,
         Parameters(params): Parameters<DeployContractParams>,
     ) -> Result<CallToolResult, McpError> {
-        let mut args = vec!["up", "--path", &params.path];
+        // Use positional PATH argument for pop up
+        let mut args = vec!["up", &params.path, "-y"];
 
         let constructor_storage;
         if let Some(ref constructor) = params.constructor {
@@ -533,6 +580,17 @@ Available ink! Contract Templates:\n\n\
             args.push(&args_storage);
         }
 
+        let value_storage;
+        if let Some(ref value) = params.value {
+            value_storage = value.clone();
+            args.push("--value");
+            args.push(&value_storage);
+        }
+
+        if params.execute.unwrap_or(false) {
+            args.push("--execute");
+        }
+
         let suri_storage;
         if let Some(ref suri) = params.suri {
             suri_storage = suri.clone();
@@ -540,24 +598,23 @@ Available ink! Contract Templates:\n\n\
             args.push(&suri_storage);
         }
 
+        // Use provided URL, or fall back to stored node URL from launch_ink_node
         let url_storage;
         if let Some(ref url) = params.url {
             url_storage = url.clone();
             args.push("--url");
             args.push(&url_storage);
-        }
-
-        if params.upload_only.unwrap_or(false) {
-            args.push("--upload-only");
-        }
-
-        if params.dry_run.unwrap_or(false) {
-            args.push("--dry-run");
+        } else if let Ok(node_url) = self.node_websocket_url.lock() {
+            if let Some(ref stored_url) = *node_url {
+                url_storage = stored_url.clone();
+                args.push("--url");
+                args.push(&url_storage);
+            }
         }
 
         match Self::execute_pop_command(&args) {
-            Ok(output) => Ok(Self::success(format!("✅ Deployment successful!\n\n{}", output))),
-            Err(e) => Ok(Self::error(format!("Deployment failed: {}", e))),
+            Ok(output) => Ok(Self::success(output)),
+            Err(e) => Ok(Self::error(format!("Deployment failed:\n\n{}", e))),
         }
     }
 
@@ -566,13 +623,27 @@ Available ink! Contract Templates:\n\n\
         &self,
         Parameters(params): Parameters<CallContractParams>,
     ) -> Result<CallToolResult, McpError> {
-        let mut args = vec!["call", "--contract", &params.contract, "--message", &params.message];
+        let mut args = vec!["call", "contract", "--path", &params.path, "--contract", &params.contract, "--message", &params.message, "-y"];
 
-        let args_storage;
-        if let Some(ref contract_args) = params.args {
-            args_storage = contract_args.clone();
+        // Split space-separated arguments into individual args for Pop CLI
+        let split_args: Vec<String> = if let Some(ref contract_args) = params.args {
+            contract_args.split_whitespace().map(String::from).collect()
+        } else {
+            vec![]
+        };
+
+        if !split_args.is_empty() {
             args.push("--args");
-            args.push(&args_storage);
+            for arg in &split_args {
+                args.push(arg);
+            }
+        }
+
+        let value_storage;
+        if let Some(ref value) = params.value {
+            value_storage = value.clone();
+            args.push("--value");
+            args.push(&value_storage);
         }
 
         let suri_storage;
@@ -582,33 +653,27 @@ Available ink! Contract Templates:\n\n\
             args.push(&suri_storage);
         }
 
+        // Use provided URL, or fall back to stored node URL from launch_ink_node
         let url_storage;
         if let Some(ref url) = params.url {
             url_storage = url.clone();
             args.push("--url");
             args.push(&url_storage);
+        } else if let Ok(node_url) = self.node_websocket_url.lock() {
+            if let Some(ref stored_url) = *node_url {
+                url_storage = stored_url.clone();
+                args.push("--url");
+                args.push(&url_storage);
+            }
         }
 
-        if params.dry_run.unwrap_or(false) {
-            args.push("--dry-run");
+        if params.execute.unwrap_or(false) {
+            args.push("--execute");
         }
 
         match Self::execute_pop_command(&args) {
             Ok(output) => Ok(Self::success(format!("✅ Contract call successful!\n\n{}", output))),
             Err(e) => Ok(Self::error(format!("Contract call failed: {}", e))),
-        }
-    }
-
-    #[tool(description = "Get information about a built contract (metadata, size, etc.)")]
-    async fn get_contract_info(
-        &self,
-        Parameters(params): Parameters<GetContractInfoParams>,
-    ) -> Result<CallToolResult, McpError> {
-        let args = vec!["info", "--path", &params.path];
-
-        match Self::execute_pop_command(&args) {
-            Ok(output) => Ok(Self::success(output)),
-            Err(e) => Ok(Self::error(format!("Failed to get contract info: {}", e))),
         }
     }
 
@@ -624,6 +689,120 @@ Available ink! Contract Templates:\n\n\
             Err(e) => Ok(Self::error(format!("Clean failed: {}", e))),
         }
     }
+
+    #[tool(description = "Launch a local ink! node for contract development and testing (runs in background)")]
+    async fn launch_ink_node(
+        &self,
+        Parameters(_params): Parameters<LaunchInkNodeParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let args = vec!["up", "ink-node", "-y", "--detach"];
+
+        match Self::execute_pop_command(&args) {
+            Ok(output) => {
+                // Extract PIDs from kill command
+                let pids = if let Some(kill_line) = output.lines().find(|line| line.contains("kill -9")) {
+                    if let Some(pids_part) = kill_line.split("kill -9 ").nth(1) {
+                        // Extract PIDs (everything before the backtick or end of numbers)
+                        pids_part
+                            .split('`')
+                            .next()
+                            .unwrap_or(pids_part)
+                            .trim()
+                            .to_string()
+                    } else {
+                        String::new()
+                    }
+                } else {
+                    String::new()
+                };
+
+                // Extract WebSocket URLs for the nodes
+                let mut ws_url = String::from("ws://localhost:9944");
+                let mut eth_url = String::from("ws://localhost:8545");
+
+                for line in output.lines() {
+                    // Extract Polkadot node WebSocket URL (from portal link)
+                    if line.contains("rpc=ws://") {
+                        if let Some(start) = line.find("rpc=ws://") {
+                            let url_part = &line[start + 4..]; // Skip "rpc="
+                            if let Some(end) = url_part.find(['#', ' ', '&']) {
+                                ws_url = url_part[..end].trim_end_matches('/').to_string();
+                            }
+                        }
+                    }
+                    // Extract Ethereum RPC URL (from "url: ws://" line)
+                    if line.contains("url: ws://") && !line.contains("rpc=") {
+                        if let Some(start) = line.find("ws://") {
+                            let url_part = &line[start..];
+                            if let Some(end) = url_part.find([' ', '\n']) {
+                                eth_url = url_part[..end].to_string();
+                            } else {
+                                eth_url = url_part.trim().to_string();
+                            }
+                        }
+                    }
+                }
+
+                // Store the WebSocket URL for later use in deployment
+                if let Ok(mut node_url) = self.node_websocket_url.lock() {
+                    *node_url = Some(ws_url);
+                }
+
+                // Store the PIDs for later use in stop_ink_node
+                if !pids.is_empty() {
+                    if let Ok(mut stored_pids) = self.node_pids.lock() {
+                        *stored_pids = Some(pids);
+                    }
+                }
+
+                Ok(Self::success(output))
+            },
+            Err(e) => Ok(Self::error(e)),
+        }
+    }
+
+    #[tool(description = "Stop a running ink! node by killing its processes")]
+    async fn stop_ink_node(
+        &self,
+        Parameters(params): Parameters<StopInkNodeParams>,
+    ) -> Result<CallToolResult, McpError> {
+        // Use provided PIDs, or fall back to stored PIDs from launch_ink_node
+        let pids_str = if let Some(ref provided_pids) = params.pids {
+            provided_pids.clone()
+        } else if let Ok(stored_pids) = self.node_pids.lock() {
+            if let Some(ref pids) = *stored_pids {
+                pids.clone()
+            } else {
+                return Ok(Self::error("No PIDs provided and no ink-node has been launched in this session.".to_string()));
+            }
+        } else {
+            return Ok(Self::error("Failed to access stored PIDs.".to_string()));
+        };
+
+        let pids: Vec<&str> = pids_str.split_whitespace().collect();
+
+        for pid in &pids {
+            match std::process::Command::new("kill").args(&["-9", pid]).output() {
+                Ok(output) => {
+                    if !output.status.success() {
+                        let error = String::from_utf8_lossy(&output.stderr);
+                        return Ok(Self::error(format!("Failed to kill process {}: {}", pid, error)));
+                    }
+                }
+                Err(e) => {
+                    return Ok(Self::error(format!("Failed to execute kill command: {}", e)));
+                }
+            }
+        }
+
+        Ok(Self::success(format!("✅ Processes killed: {}", pids_str)))
+    }
+
+
+    /*
+    // ============================================================================
+    // COMMENTED OUT: Chain/Parachain/Pallet Tools
+    // ============================================================================
 
     #[tool(description = "Create a new parachain/appchain project using Pop CLI templates")]
     async fn create_parachain(
@@ -797,6 +976,7 @@ Available ink! Contract Templates:\n\n\
             Err(e) => Ok(Self::error(format!("Benchmark failed: {}", e))),
         }
     }
+    */
 
     #[tool(description = "Get help for any Pop CLI command")]
     async fn pop_help(
@@ -813,7 +993,7 @@ Available ink! Contract Templates:\n\n\
         };
 
         match Self::execute_pop_command(&args) {
-            Ok(output) => Ok(Self::success(output)),
+            Ok(output) => Ok(Self::success(format!("📚 Pop CLI Help:\n\n{}", output))),
             Err(e) => Ok(Self::error(format!("Failed to get help: {}", e))),
         }
     }
@@ -828,7 +1008,7 @@ Available ink! Contract Templates:\n\n\
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
-    #[tool(description = "Convert between Ethereum and Substrate (Polkadot) addresses. If pop convert fails, use the runtime API fallback.")]
+    #[tool(description = "Convert between Ethereum and Substrate (Polkadot) addresses")]
     async fn convert_address(
         &self,
         Parameters(params): Parameters<ConvertAddressParams>,
@@ -842,48 +1022,8 @@ Available ink! Contract Templates:\n\n\
         }
 
         match Self::execute_pop_command(&args) {
-            Ok(output) => Ok(Self::success(format!("✅ Address conversion:\n\n{}", output))),
-            Err(e) => {
-                // Fallback: provide instructions for using runtime API
-                let fallback_script = format!(
-r#"❌ Pop convert failed: {}
-
-📝 Fallback method using Runtime API:
-
-If you need to convert a Substrate address to Ethereum format, use this Node.js script:
-
-```javascript
-const {{ ApiPromise, WsProvider }} = require('@polkadot/api');
-const {{ decodeAddress }} = require('@polkadot/util-crypto');
-const {{ u8aToHex }} = require('@polkadot/util');
-
-async function getEthAddress() {{
-  const provider = new WsProvider('wss://testnet-passet-hub.polkadot.io');
-  const api = await ApiPromise.create({{ provider }});
-
-  const accountId = '{}';
-  const publicKey = decodeAddress(accountId);
-  const publicKeyHex = u8aToHex(publicKey);
-
-  const result = await api.call.reviveApi.address(publicKeyHex);
-  console.log('Ethereum address:', result.toHex());
-
-  await api.disconnect();
-}}
-
-getEthAddress().catch(console.error);
-```
-
-To run this:
-1. Install dependencies: npm install @polkadot/api @polkadot/util @polkadot/util-crypto
-2. Save the script to a file (e.g., convert.js)
-3. Run: node convert.js
-
-Note: Conversion from Ethereum to Substrate addresses is not reliably possible.
-"#, e, params.address);
-
-                Ok(Self::success(fallback_script))
-            }
+            Ok(output) => Ok(Self::success(output)),
+            Err(e) => Ok(Self::error(format!("Address conversion failed:\n\n{}", e))),
         }
     }
 
@@ -987,3 +1127,4 @@ impl ServerHandler for PopMcpServer {
             .map_err(|e| McpError::resource_not_found(e.to_string(), None))
     }
 }
+

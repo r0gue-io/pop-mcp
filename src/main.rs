@@ -1,9 +1,8 @@
-mod tools;
-mod resources;
+//! Pop MCP Server binary entry point
 
 use anyhow::Result;
+use pop_mcp_server::PopMcpServer;
 use rmcp::{transport::stdio, ServiceExt};
-use tools::PopMcpServer;
 
 #[tokio::main]
 async fn main() -> Result<()> {

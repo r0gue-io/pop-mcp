@@ -9,10 +9,6 @@ repository = "https://github.com/r0gue-io/pop-mcp"
 homepage = "https://github.com/r0gue-io/pop-mcp"
 keywords = ["mcp", "polkadot", "ink", "substrate", "smart-contracts"]
 
-[[bin]]
-name = "pop-mcp-server"
-path = "src/main.rs"
-
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 rmcp = { version = "0.8", features = ["server", "transport-io"] }
@@ -21,6 +17,10 @@ serde_json = "1"
 schemars = "1.0"
 anyhow = "1.0"
 reqwest = { version = "0.11", features = ["json"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3"
 
 [profile.release]
 opt-level = "z"     # Optimize for size

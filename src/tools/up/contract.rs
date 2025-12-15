@@ -44,7 +44,9 @@ pub fn build_deploy_contract_args<'a>(
 
     if let Some(ref contract_args) = params.args {
         args.push("--args");
-        args.push(contract_args.as_str());
+        for arg in contract_args.split_whitespace() {
+            args.push(arg);
+        }
     }
 
     if let Some(ref value) = params.value {
@@ -90,89 +92,91 @@ pub fn deploy_contract<E: CommandExecutor>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::executor::PopExecutor;
-    use rmcp::model::RawContent;
+    use crate::executor::{test_utils::MockExecutor, PopExecutor};
+    use crate::tools::helpers::{content_text, create_standard_contract, pop_available};
 
-    fn content_text(result: &rmcp::model::CallToolResult) -> String {
-        result
-            .content
-            .last()
-            .and_then(|c| match &c.raw {
-                RawContent::Text(t) => Some(t.text.clone()),
-                _ => None,
-            })
-            .unwrap_or_default()
+    #[test]
+    fn build_args_variants() {
+        struct Case {
+            name: &'static str,
+            params: DeployContractParams,
+            stored_url: Option<&'static str>,
+            expected: Vec<&'static str>,
+        }
+
+        let cases = vec![
+            Case {
+                name: "minimal",
+                params: DeployContractParams {
+                    path: "./my_contract".to_string(),
+                    constructor: None,
+                    args: None,
+                    value: None,
+                    execute: None,
+                    suri: None,
+                    url: None,
+                },
+                stored_url: None,
+                expected: vec!["up", "./my_contract", "-y"],
+            },
+            Case {
+                name: "full_with_explicit_url",
+                params: DeployContractParams {
+                    path: "./my_contract".to_string(),
+                    constructor: Some("new".to_string()),
+                    args: Some("100 true".to_string()),
+                    value: Some("1000".to_string()),
+                    execute: Some(true),
+                    suri: Some("//Alice".to_string()),
+                    url: Some("ws://explicit:9944".to_string()),
+                },
+                stored_url: Some("ws://stored:9944"),
+                expected: vec![
+                    "up",
+                    "./my_contract",
+                    "-y",
+                    "--constructor",
+                    "new",
+                    "--args",
+                    "100",
+                    "true",
+                    "--value",
+                    "1000",
+                    "--execute",
+                    "--suri",
+                    "//Alice",
+                    "--url",
+                    "ws://explicit:9944",
+                ],
+            },
+            Case {
+                name: "stored_url_fallback",
+                params: DeployContractParams {
+                    path: "./my_contract".to_string(),
+                    constructor: None,
+                    args: None,
+                    value: None,
+                    execute: None,
+                    suri: None,
+                    url: None,
+                },
+                stored_url: Some("ws://stored:9944"),
+                expected: vec!["up", "./my_contract", "-y", "--url", "ws://stored:9944"],
+            },
+        ];
+
+        for case in cases {
+            let args = build_deploy_contract_args(&case.params, case.stored_url);
+            assert_eq!(args, case.expected, "case {}", case.name);
+        }
     }
 
     #[test]
-    fn test_build_args_minimal() {
-        let params = DeployContractParams {
-            path: "./my_contract".to_string(),
-            constructor: None,
-            args: None,
-            value: None,
-            execute: None,
-            suri: None,
-            url: None,
-        };
-        let args = build_deploy_contract_args(&params, None);
-        assert_eq!(args, vec!["up", "./my_contract", "-y"]);
-    }
-
-    #[test]
-    fn test_build_args_full() {
-        let params = DeployContractParams {
-            path: "./my_contract".to_string(),
-            constructor: Some("new".to_string()),
-            args: Some("100".to_string()),
-            value: Some("1000".to_string()),
-            execute: Some(true),
-            suri: Some("//Alice".to_string()),
-            url: Some("ws://localhost:9944".to_string()),
-        };
-        let args = build_deploy_contract_args(&params, None);
-
-        assert!(args.contains(&"--constructor"));
-        assert!(args.contains(&"new"));
-        assert!(args.contains(&"--args"));
-        assert!(args.contains(&"100"));
-        assert!(args.contains(&"--value"));
-        assert!(args.contains(&"1000"));
-        assert!(args.contains(&"--execute"));
-        assert!(args.contains(&"--suri"));
-        assert!(args.contains(&"//Alice"));
-        assert!(args.contains(&"--url"));
-        assert!(args.contains(&"ws://localhost:9944"));
-    }
-
-    #[test]
-    fn test_build_args_url_fallback() {
-        let params = DeployContractParams {
-            path: "./my_contract".to_string(),
-            constructor: None,
-            args: None,
-            value: None,
-            execute: None,
-            suri: None,
-            url: None,
-        };
-        // Stored URL is used when no explicit URL
-        let args = build_deploy_contract_args(&params, Some("ws://stored:9944"));
-        assert!(args.contains(&"ws://stored:9944"));
-
-        // Explicit URL overrides stored
-        let params_with_url = DeployContractParams {
-            url: Some("ws://explicit:9944".to_string()),
-            ..params
-        };
-        let args = build_deploy_contract_args(&params_with_url, Some("ws://stored:9944"));
-        assert!(args.contains(&"ws://explicit:9944"));
-        assert!(!args.contains(&"ws://stored:9944"));
-    }
-
-    #[test]
-    fn test_deploy_nonexistent_path() {
+    fn deploy_nonexistent_path() {
         let executor = PopExecutor::new();
+        if !pop_available(&executor) {
+            return;
+        }
         let params = DeployContractParams {
             path: "/nonexistent/path/to/contract".to_string(),
             constructor: None,
@@ -184,9 +188,34 @@ mod tests {
         };
 
         let result = deploy_contract(&executor, params, None).unwrap();
-        assert!(result.is_error.unwrap_or(false));
+        assert!(result.is_error.unwrap());
 
         let text = content_text(&result);
         assert!(text.contains("Deployment failed"));
+    }
+
+    #[test]
+    fn deploy_success_mock() {
+        let pop_exec = PopExecutor::new();
+        if !pop_available(&pop_exec) {
+            return;
+        }
+
+        let executor = MockExecutor::success("Deployment OK");
+        let contract = create_standard_contract(&pop_exec, "deploy_success");
+        let params = DeployContractParams {
+            path: contract.path.to_string_lossy().to_string(),
+            constructor: Some("new".to_string()),
+            args: Some("42 true".to_string()),
+            value: Some("100".to_string()),
+            execute: Some(true),
+            suri: Some("//Alice".to_string()),
+            url: Some("ws://localhost:9944".to_string()),
+        };
+
+        let result = deploy_contract(&executor, params, None).unwrap();
+        assert!(!result.is_error.unwrap());
+        let text = content_text(&result);
+        assert!(text.contains("Deployment OK"));
     }
 }

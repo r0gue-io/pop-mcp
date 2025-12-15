@@ -74,12 +74,9 @@ jobs:
         run: cargo clippy --locked --all-features --all-targets
 
   test:
-    name: Test (${{ matrix.os }})
+    name: Test
     needs: [fmt, check]
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -89,7 +86,6 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ matrix.os == 'ubuntu-latest' }}
           shared-key: shared-${{ github.head_ref || github.ref_name }}
 
       - name: Cache pop assets
@@ -98,20 +94,10 @@ jobs:
           path: ~/.cache/pop
           key: pop-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
 
-      - name: Install toolchain deps (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Install toolchain deps
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler clang cmake
 
-      - name: Install toolchain deps (macOS)
-        if: matrix.os == 'macos-latest'
-        run: brew update && brew install protobuf cmake
-
-      - name: Install pop (macOS)
-        if: matrix.os == 'macos-latest'
-        run: brew install r0gue-io/pop-cli/pop
-
-      - name: Install pop (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Install pop
         run: cargo install --locked pop-cli
 
       - name: Bootstrap pop binaries

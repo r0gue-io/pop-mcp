@@ -82,21 +82,21 @@ mod tests {
     use crate::executor::test_utils::MockExecutor;
 
     #[test]
-    fn test_check_pop_installation_installed() {
+    fn check_pop_installation_installed() {
         let executor = MockExecutor::success("pop 0.5.0");
         let result = check_pop_installation(&executor, CheckPopInstallationParams {}).unwrap();
         assert!(!result.is_error.unwrap_or(true));
     }
 
     #[test]
-    fn test_check_pop_installation_not_installed() {
+    fn check_pop_installation_not_installed() {
         let executor = MockExecutor::failure("command not found");
         let result = check_pop_installation(&executor, CheckPopInstallationParams {}).unwrap();
         assert!(result.is_error.unwrap_or(false));
     }
 
     #[test]
-    fn test_install_pop_instructions_default() {
+    fn install_pop_instructions_default() {
         let params = InstallPopInstructionsParams { platform: None };
         let result = install_pop_instructions(params).unwrap();
         assert!(!result.is_error.unwrap_or(false));

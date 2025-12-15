@@ -52,22 +52,18 @@ impl PopExecutor {
     }
 
     fn execute_raw(&self, args: &[&str]) -> PopMcpResult<CommandOutput> {
-        match Command::new("pop").args(args).output() {
-            Ok(output) => {
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let output = Command::new("pop").args(args).output().map_err(|e| {
+            PopMcpError::CommandExecution(format!("Failed to execute pop command: {}", e))
+        })?;
 
-                Ok(CommandOutput {
-                    stdout,
-                    stderr,
-                    success: output.status.success(),
-                })
-            }
-            Err(e) => Err(PopMcpError::CommandExecution(format!(
-                "Failed to execute pop command: {}",
-                e
-            ))),
-        }
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+        Ok(CommandOutput {
+            stdout,
+            stderr,
+            success: output.status.success(),
+        })
     }
 }
 
@@ -132,7 +128,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_command_output_combined() {
+    fn command_output_combines_streams() {
         let output = CommandOutput {
             stdout: "stdout content".to_string(),
             stderr: "stderr content".to_string(),
@@ -143,7 +139,7 @@ mod tests {
     }
 
     #[test]
-    fn test_command_output_empty() {
+    fn command_output_empty() {
         let output = CommandOutput {
             stdout: String::new(),
             stderr: String::new(),

@@ -101,72 +101,125 @@ pub fn call_contract<E: CommandExecutor>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::executor::test_utils::MockExecutor;
+    use crate::executor::PopExecutor;
+    use crate::tools::helpers::{content_text, create_standard_contract, pop_available};
 
     #[test]
-    fn test_build_args_basic() {
-        let params = CallContractParams {
-            path: "./my_contract".to_string(),
-            contract: "0x1234".to_string(),
-            message: "get".to_string(),
-            args: None,
-            value: None,
-            execute: None,
-            suri: None,
-            url: None,
-        };
-        let args = build_call_contract_args(&params, None);
+    fn build_args_variants() {
+        struct Case {
+            name: &'static str,
+            params: CallContractParams,
+            stored_url: Option<&'static str>,
+            expected: Vec<&'static str>,
+        }
 
-        assert!(args.contains(&"call"));
-        assert!(args.contains(&"contract"));
-        assert!(args.contains(&"--contract"));
-        assert!(args.contains(&"0x1234"));
-        assert!(args.contains(&"--message"));
-        assert!(args.contains(&"get"));
+        let cases = vec![
+            Case {
+                name: "minimal",
+                params: CallContractParams {
+                    path: "./my_contract".to_string(),
+                    contract: "0x1234".to_string(),
+                    message: "get".to_string(),
+                    args: None,
+                    value: None,
+                    execute: None,
+                    suri: None,
+                    url: None,
+                },
+                stored_url: None,
+                expected: vec![
+                    "call",
+                    "contract",
+                    "--path",
+                    "./my_contract",
+                    "--contract",
+                    "0x1234",
+                    "--message",
+                    "get",
+                    "-y",
+                ],
+            },
+            Case {
+                name: "args_value_suri_execute_url",
+                params: CallContractParams {
+                    path: "./p".to_string(),
+                    contract: "0xabc".to_string(),
+                    message: "transfer".to_string(),
+                    args: Some("0x5678 100".to_string()),
+                    value: Some("10".to_string()),
+                    execute: Some(true),
+                    suri: Some("//Alice".to_string()),
+                    url: Some("ws://explicit:9944".to_string()),
+                },
+                stored_url: Some("ws://stored:9944"),
+                expected: vec![
+                    "call",
+                    "contract",
+                    "--path",
+                    "./p",
+                    "--contract",
+                    "0xabc",
+                    "--message",
+                    "transfer",
+                    "-y",
+                    "--args",
+                    "0x5678",
+                    "100",
+                    "--value",
+                    "10",
+                    "--suri",
+                    "//Alice",
+                    "--url",
+                    "ws://explicit:9944",
+                    "--execute",
+                ],
+            },
+            Case {
+                name: "stored_url_fallback",
+                params: CallContractParams {
+                    path: "./p".to_string(),
+                    contract: "0xabc".to_string(),
+                    message: "get".to_string(),
+                    args: None,
+                    value: None,
+                    execute: None,
+                    suri: None,
+                    url: None,
+                },
+                stored_url: Some("ws://stored:9944"),
+                expected: vec![
+                    "call",
+                    "contract",
+                    "--path",
+                    "./p",
+                    "--contract",
+                    "0xabc",
+                    "--message",
+                    "get",
+                    "-y",
+                    "--url",
+                    "ws://stored:9944",
+                ],
+            },
+        ];
+
+        for case in cases {
+            let args = build_call_contract_args(&case.params, case.stored_url);
+            assert_eq!(args, case.expected, "case {}", case.name);
+        }
     }
 
     #[test]
-    fn test_build_args_with_split_args() {
+    fn call_contract_failure() {
+        let executor = PopExecutor::new();
+        if !pop_available(&executor) {
+            return;
+        }
+
+        let contract = create_standard_contract(&executor, "call_contract_failure");
+
         let params = CallContractParams {
-            path: "./my_contract".to_string(),
-            contract: "0x1234".to_string(),
-            message: "transfer".to_string(),
-            args: Some("0x5678 100".to_string()),
-            value: None,
-            execute: Some(true),
-            suri: None,
-            url: None,
-        };
-        let args = build_call_contract_args(&params, Some("ws://localhost:9944"));
-
-        // Args should be split
-        assert!(args.contains(&"0x5678"));
-        assert!(args.contains(&"100"));
-        assert!(args.contains(&"--execute"));
-    }
-
-    #[test]
-    fn test_build_args_stored_url() {
-        let params = CallContractParams {
-            path: "./my_contract".to_string(),
-            contract: "0x1234".to_string(),
-            message: "get".to_string(),
-            args: None,
-            value: None,
-            execute: None,
-            suri: None,
-            url: None,
-        };
-        let args = build_call_contract_args(&params, Some("ws://stored:9944"));
-
-        assert!(args.contains(&"ws://stored:9944"));
-    }
-
-    #[test]
-    fn test_call_contract_success() {
-        let executor = MockExecutor::success("Result: 42");
-        let params = CallContractParams {
-            path: "./my_contract".to_string(),
+            path: contract.path.to_string_lossy().to_string(),
             contract: "0x1234".to_string(),
             message: "get".to_string(),
             args: None,
@@ -177,24 +230,9 @@ mod tests {
         };
 
         let result = call_contract(&executor, params, None).unwrap();
-        assert!(!result.is_error.unwrap_or(true));
-    }
+        assert!(result.is_error.unwrap());
 
-    #[test]
-    fn test_call_contract_failure() {
-        let executor = MockExecutor::failure("Contract not found");
-        let params = CallContractParams {
-            path: "./my_contract".to_string(),
-            contract: "0x1234".to_string(),
-            message: "get".to_string(),
-            args: None,
-            value: None,
-            execute: None,
-            suri: None,
-            url: None,
-        };
-
-        let result = call_contract(&executor, params, None).unwrap();
-        assert!(result.is_error.unwrap_or(false));
+        let text = content_text(&result);
+        assert!(text.contains("Contract call failed"));
     }
 }

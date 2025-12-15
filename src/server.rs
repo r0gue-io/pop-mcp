@@ -138,17 +138,19 @@ impl PopMcpServer {
     #[tool(
         description = "Launch a local ink! node for contract development and testing (runs in background)"
     )]
-    async fn launch_ink_node(
+    async fn up_ink_node(
         &self,
         Parameters(()): Parameters<()>,
     ) -> Result<CallToolResult, McpError> {
-        let (result, node_result) = tools::launch_ink_node(&self.executor)
+        let result = tools::up_ink_node(&self.executor)
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 
-        // Store the WebSocket URL for later use
-        if let Some(url) = node_result.websocket_url {
-            if let Ok(mut stored_url) = self.node_websocket_url.lock() {
-                *stored_url = Some(url);
+        // Store the WebSocket URL for later use (result contains the URL on success)
+        if result.is_error != Some(true) {
+            if let Some(url) = tools::helpers::extract_text(&result) {
+                if let Ok(mut stored_url) = self.node_websocket_url.lock() {
+                    *stored_url = Some(url);
+                }
             }
         }
 
@@ -156,11 +158,12 @@ impl PopMcpServer {
     }
 
     #[tool(description = "Stop all running local ink! nodes")]
-    async fn stop_ink_node(
+    async fn clean_nodes(
         &self,
         Parameters(()): Parameters<()>,
     ) -> Result<CallToolResult, McpError> {
-        tools::stop_nodes(&self.executor).map_err(|e| McpError::internal_error(e.to_string(), None))
+        tools::clean_nodes(&self.executor)
+            .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
     #[tool(description = "Get help for any Pop CLI command")]
@@ -243,7 +246,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_server_info() {
+    fn server_info_includes_capabilities() {
         let server = PopMcpServer::new();
         let info = server.get_info();
 
@@ -261,7 +264,7 @@ mod tests {
     }
 
     #[test]
-    fn test_server_has_executor() {
+    fn server_has_executor() {
         let server = PopMcpServer::new();
         // Server should have executor for running pop CLI commands
         // The #[tool_router] macro ensures tools are registered
@@ -270,7 +273,7 @@ mod tests {
     }
 
     #[test]
-    fn test_url_storage() {
+    fn url_storage_round_trips() {
         let server = PopMcpServer::new();
 
         // Initially empty

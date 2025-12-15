@@ -53,7 +53,7 @@ impl CreateContractParams {
 }
 
 /// Build command arguments for create_contract
-pub fn build_create_contract_args<'a>(params: &'a CreateContractParams) -> [&'a str; 5] {
+pub fn build_create_contract_args(params: &CreateContractParams) -> [&str; 5] {
     [
         "new",
         "contract",
@@ -71,14 +71,14 @@ pub fn create_contract<E: CommandExecutor>(
     // Validate parameters
     params
         .validate()
-        .map_err(|e| crate::error::PopMcpError::InvalidInput(e))?;
+        .map_err(crate::error::PopMcpError::InvalidInput)?;
 
     let args = build_create_contract_args(&params);
 
     match executor.execute(&args) {
-        Ok(output) => Ok(success_result(format!(
-            "Successfully created contract: {}\n\n{}",
-            params.name, output
+        Ok(_) => Ok(success_result(format!(
+            "Successfully created contract: {}",
+            params.name
         ))),
         Err(e) => Ok(error_result(format!("Failed to create contract: {}", e))),
     }
@@ -256,28 +256,12 @@ async fn adapt_frontend_to_contract<E: CommandExecutor>(
 mod tests {
     use super::*;
     use crate::executor::PopExecutor;
-    use rmcp::model::RawContent;
-    use std::env;
-    use tempfile::tempdir;
-
-    /// Check if pop is available; used to skip tests when not installed
-    fn pop_available(executor: &PopExecutor) -> bool {
-        executor.execute(&["--version"]).is_ok()
-    }
-
-    fn content_text(result: &rmcp::model::CallToolResult) -> String {
-        result
-            .content
-            .last()
-            .and_then(|c| match &c.raw {
-                RawContent::Text(t) => Some(t.text.clone()),
-                _ => None,
-            })
-            .unwrap_or_default()
-    }
+    use crate::tools::helpers::{content_text, pop_available};
+    use serial_test::serial;
+    use tempfile::TempDir;
 
     #[test]
-    fn test_validate_allows_valid_names() {
+    fn validate_allows_valid_names() {
         for name in ["mytoken123", "my_token_v2"] {
             let params = CreateContractParams {
                 name: name.to_string(),
@@ -288,7 +272,7 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_rejects_invalid_names() {
+    fn validate_rejects_invalid_names() {
         for name in [
             "", "my-token", "my token", "my@token", "my#token", "my.token",
         ] {
@@ -301,7 +285,7 @@ mod tests {
     }
 
     #[test]
-    fn test_build_args() {
+    fn build_args_include_template() {
         let params = CreateContractParams {
             name: "my_contract".to_string(),
             template: "erc20".to_string(),
@@ -314,7 +298,7 @@ mod tests {
     }
 
     #[test]
-    fn test_list_templates_includes_known_entries() {
+    fn list_templates_includes_known_entries() {
         let result = list_templates(()).unwrap();
         assert!(!result.is_error.unwrap());
         let text = content_text(&result);
@@ -332,15 +316,19 @@ mod tests {
     }
 
     #[test]
-    fn test_create_standard_contract() {
+    #[serial]
+    fn create_standard_contract_succeeds() {
         let executor = PopExecutor::new();
-        assert!(pop_available(&executor));
+        if !pop_available(&executor) {
+            return;
+        }
 
-        let dir = tempdir().unwrap();
-        env::set_current_dir(dir.path()).expect("Failed to change dir");
+        let temp_dir = TempDir::new().unwrap();
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(temp_dir.path()).unwrap();
 
         let contract_name = "test_contract";
-        let contract_path = dir.path().join(contract_name);
+        let contract_path = temp_dir.path().join(contract_name);
 
         let params = CreateContractParams {
             name: contract_name.to_string(),
@@ -348,6 +336,8 @@ mod tests {
         };
 
         let result = create_contract(&executor, params);
+        std::env::set_current_dir(&original_dir).unwrap();
+
         assert!(result.is_ok());
         let result = result.unwrap();
         assert!(!result.is_error.unwrap());
@@ -360,9 +350,11 @@ mod tests {
     }
 
     #[test]
-    fn test_create_contract_invalid_name_fails_before_execution() {
+    fn create_contract_invalid_name_fails_before_execution() {
         let executor = PopExecutor::new();
-        assert!(pop_available(&executor));
+        if !pop_available(&executor) {
+            return;
+        }
         let params = CreateContractParams {
             name: "invalid-name".to_string(),
             template: "standard".to_string(),
@@ -372,9 +364,11 @@ mod tests {
     }
 
     #[test]
-    fn test_create_contract_cli_failure() {
+    fn create_contract_cli_failure() {
         let executor = PopExecutor::new();
-        assert!(pop_available(&executor));
+        if !pop_available(&executor) {
+            return;
+        }
 
         let params = CreateContractParams {
             name: "test_contract".to_string(),

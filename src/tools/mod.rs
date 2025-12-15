@@ -9,6 +9,7 @@ use crate::executor::CommandExecutor;
 
 pub mod build;
 pub mod call;
+pub mod clean;
 pub mod convert;
 pub mod helpers;
 pub mod install;
@@ -18,6 +19,7 @@ pub mod up;
 
 pub use build::contract::{build_build_contract_args, build_contract, BuildContractParams};
 pub use call::contract::{build_call_contract_args, call_contract, CallContractParams};
+pub use clean::clean_nodes;
 pub use convert::{convert_address, ConvertAddressParams};
 pub use install::{
     check_pop_installation, install_pop_instructions, CheckPopInstallationParams,
@@ -26,7 +28,7 @@ pub use install::{
 pub use new::contract::{build_create_contract_args, create_contract, CreateContractParams};
 pub use new::list_templates;
 pub use test::contract::{build_test_contract_args, test_contract, TestContractParams};
-pub use up::chain::{launch_ink_node, parse_launch_output, stop_nodes, LaunchNodeResult};
+pub use up::chain::up_ink_node;
 pub use up::contract::{build_deploy_contract_args, deploy_contract, DeployContractParams};
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]

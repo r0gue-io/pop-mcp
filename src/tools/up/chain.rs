@@ -6,59 +6,35 @@ use crate::error::PopMcpResult;
 use crate::executor::CommandExecutor;
 use crate::tools::helpers::{error_result, success_result};
 
-/// Result of launching an ink node
-#[derive(Debug, Clone)]
-pub struct LaunchNodeResult {
-    pub websocket_url: Option<String>,
-}
-
-/// Parse the output from launch_ink_node to extract WebSocket URL
-pub fn parse_launch_output(output: &str) -> LaunchNodeResult {
-    let mut ws_url = String::from("ws://localhost:9944");
-
+/// Parse the output to extract WebSocket URL
+///
+/// Looks for lines like `url: ws://localhost:9944/` in the output
+fn parse_ws_url(output: &str) -> Option<String> {
     for line in output.lines() {
-        if line.contains("rpc=ws://") {
-            if let Some(start) = line.find("rpc=ws://") {
-                let url_part = &line[start + 4..]; // Skip "rpc="
-                if let Some(end) = url_part.find(['#', ' ', '&']) {
-                    ws_url = url_part[..end].trim_end_matches('/').to_string();
-                }
+        // Strip common prefixes (pipe chars from formatted output)
+        let trimmed = line.trim().trim_start_matches('│').trim();
+        // Look for "url: ws://..." pattern (the local node URL on port 9944)
+        if trimmed.starts_with("url:") && trimmed.contains("ws://") && trimmed.contains(":9944") {
+            if let Some(start) = trimmed.find("ws://") {
+                return Some(trimmed[start..].trim_end_matches('/').to_string());
             }
         }
     }
-
-    LaunchNodeResult {
-        websocket_url: Some(ws_url),
-    }
+    None
 }
 
-/// Execute launch_ink_node tool (pop up ink-node)
-pub fn launch_ink_node<E: CommandExecutor>(
-    executor: &E,
-) -> PopMcpResult<(CallToolResult, LaunchNodeResult)> {
+/// Execute up_ink_node tool (pop up ink-node)
+///
+/// Returns the websocket URL on success (e.g., "ws://localhost:9944")
+pub fn up_ink_node<E: CommandExecutor>(executor: &E) -> PopMcpResult<CallToolResult> {
     let args = ["up", "ink-node", "-y", "--detach"];
 
     match executor.execute(&args) {
-        Ok(output) => {
-            let result = parse_launch_output(&output);
-            Ok((success_result(output), result))
-        }
-        Err(e) => Ok((
-            error_result(e.to_string()),
-            LaunchNodeResult {
-                websocket_url: None,
-            },
-        )),
-    }
-}
-
-/// Stop all running local nodes using pop clean
-pub fn stop_nodes<E: CommandExecutor>(executor: &E) -> PopMcpResult<CallToolResult> {
-    let args = ["clean", "node", "--all"];
-
-    match executor.execute(&args) {
-        Ok(output) => Ok(success_result(format!("Nodes stopped!\n\n{}", output))),
-        Err(e) => Ok(error_result(format!("Failed to stop nodes: {}", e))),
+        Ok(output) => match parse_ws_url(&output) {
+            Some(url) => Ok(success_result(url)),
+            None => Ok(error_result("Failed to parse websocket URL from output")),
+        },
+        Err(e) => Ok(error_result(e.to_string())),
     }
 }
 
@@ -66,58 +42,58 @@ pub fn stop_nodes<E: CommandExecutor>(executor: &E) -> PopMcpResult<CallToolResu
 mod tests {
     use super::*;
     use crate::executor::PopExecutor;
-    use rmcp::model::RawContent;
-
-    fn content_text(result: &rmcp::model::CallToolResult) -> String {
-        result
-            .content
-            .last()
-            .and_then(|c| match &c.raw {
-                RawContent::Text(t) => Some(t.text.clone()),
-                _ => None,
-            })
-            .unwrap_or_default()
-    }
+    use crate::tools::clean::clean_nodes;
+    use crate::tools::helpers::{extract_text, pop_available, test_utils::is_port_in_use};
 
     #[test]
-    fn test_parse_launch_output_with_url() {
+    fn parse_ws_url_extracts_localhost_url() {
         let output = r#"
-Node started!
-Portal: https://polkadot.js.org/apps/?rpc=ws://127.0.0.1:9944#/explorer
+┌   Pop CLI : Launch a local Ink! node
+│
+⚙  Local node started successfully:
+│  portal: https://polkadot.js.org/apps/?rpc=ws://localhost:9944/#/explorer
+│  url: ws://localhost:9944/
+│  logs: tail -f /var/folders/32/t119h4g16mq5jrlm7f4_shhm0000gp/T/.tmpDGAoYa
+│
+⚙  Ethereum RPC node started successfully:
+│  url: ws://localhost:8545
+│  logs: tail -f /var/folders/32/t119h4g16mq5jrlm7f4_shhm0000gp/T/.tmptLAPcC
+│
+└  ✅ Ink! node bootstrapped successfully. Run `kill -9 11040 11253` to terminate it.
 "#;
-        let result = parse_launch_output(output);
-        assert_eq!(
-            result.websocket_url,
-            Some("ws://127.0.0.1:9944".to_string())
-        );
+        let url = parse_ws_url(output);
+        assert_eq!(url, Some("ws://localhost:9944".to_string()));
     }
 
     #[test]
-    fn test_parse_launch_output_default_url() {
-        let output = "Node started!";
-        let result = parse_launch_output(output);
-        assert_eq!(
-            result.websocket_url,
-            Some("ws://localhost:9944".to_string())
-        );
+    fn parse_ws_url_returns_none_when_missing() {
+        let output = "Some error occurred";
+        let url = parse_ws_url(output);
+        assert_eq!(url, None);
     }
 
     #[test]
-    fn test_launch_and_stop_ink_node() {
+    fn up_ink_node_launches_node() {
         let executor = PopExecutor::new();
+        if !pop_available(&executor) {
+            return;
+        }
 
         // Launch ink-node
-        let (result, node_result) = launch_ink_node(&executor).unwrap();
+        let result = up_ink_node(&executor).unwrap();
         assert!(!result.is_error.unwrap());
 
-        let text = content_text(&result);
-        assert!(text.contains("successfully"));
+        // Verify result contains the websocket URL
+        let url = extract_text(&result).unwrap();
+        assert_eq!(url, "ws://localhost:9944");
 
-        // Verify we got a websocket URL
-        assert!(node_result.websocket_url.is_some());
+        // Verify port 9944 is in use
+        assert!(
+            is_port_in_use(9944),
+            "Port 9944 should be in use after launch"
+        );
 
-        // Stop the node
-        let stop_result = stop_nodes(&executor).unwrap();
-        assert!(!stop_result.is_error.unwrap());
+        // Clean up
+        let _ = clean_nodes(&executor);
     }
 }

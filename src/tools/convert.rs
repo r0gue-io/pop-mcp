@@ -42,7 +42,7 @@ pub fn convert_address<E: CommandExecutor>(
     // Validate parameters
     params
         .validate()
-        .map_err(|e| crate::error::PopMcpError::InvalidInput(e))?;
+        .map_err(crate::error::PopMcpError::InvalidInput)?;
 
     let args = build_convert_address_args(&params);
 
@@ -55,27 +55,11 @@ pub fn convert_address<E: CommandExecutor>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::executor::test_utils::MockExecutor;
-    use crate::executor::PopExecutor;
-    use rmcp::model::RawContent;
-
-    fn pop_available(executor: &PopExecutor) -> bool {
-        executor.execute(&["--version"]).is_ok()
-    }
-
-    fn content_text(result: &rmcp::model::CallToolResult) -> String {
-        result
-            .content
-            .last()
-            .and_then(|c| match &c.raw {
-                RawContent::Text(t) => Some(t.text.clone()),
-                _ => None,
-            })
-            .unwrap_or_default()
-    }
+    use crate::executor::{test_utils::MockExecutor, PopExecutor};
+    use crate::tools::helpers::{content_text, pop_available};
 
     #[test]
-    fn test_convert_empty_address_fails_before_execution() {
+    fn convert_empty_address_fails_before_execution() {
         let executor = MockExecutor::success("Should not reach here");
         let params = ConvertAddressParams {
             address: "".to_string(),
@@ -84,7 +68,7 @@ mod tests {
     }
 
     #[test]
-    fn test_convert_ethereum_to_substrate() {
+    fn convert_ethereum_to_substrate() {
         let executor = PopExecutor::new();
         if !pop_available(&executor) {
             return;
@@ -100,7 +84,7 @@ mod tests {
     }
 
     #[test]
-    fn test_convert_substrate_to_ethereum() {
+    fn convert_substrate_to_ethereum() {
         let executor = PopExecutor::new();
         if !pop_available(&executor) {
             return;
@@ -119,7 +103,7 @@ mod tests {
     }
 
     #[test]
-    fn test_convert_invalid_address() {
+    fn convert_invalid_address() {
         let executor = PopExecutor::new();
         if !pop_available(&executor) {
             return;

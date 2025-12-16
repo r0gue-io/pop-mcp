@@ -45,7 +45,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler clang cmake
 
       - name: Install pop
-        run: cargo install --locked pop-cli
+        run: cargo install --locked --force pop-cli
 
       - name: Bootstrap pop binaries
         run: pop install -y

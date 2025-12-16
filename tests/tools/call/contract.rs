@@ -1,10 +1,11 @@
-use crate::common::{content_text, pop_executor, Contract};
+use crate::common::{is_error, is_success, pop_executor, text, Contract};
+use anyhow::{anyhow, Result};
 use pop_mcp_server::tools::call::contract::{call_contract, CallContractParams};
 use serial_test::serial;
 
 #[test]
-fn call_contract_failure() {
-    let executor = pop_executor();
+fn call_contract_failure() -> Result<()> {
+    let executor = pop_executor()?;
 
     // Call with a non-existent contract path - this will definitely fail
     let params = CallContractParams {
@@ -18,34 +19,72 @@ fn call_contract_failure() {
         url: None,
     };
 
-    let result = call_contract(&executor, params, None).unwrap();
-    assert!(result.is_error.unwrap());
-    assert!(content_text(&result).contains("Contract call failed"));
+    let result = call_contract(&executor, params, None)?;
+    assert!(is_error(&result));
+    assert!(text(&result)?.contains("Contract call failed"));
+    Ok(())
 }
 
 #[test]
 #[serial]
-fn call_contract_success() {
-    let executor = pop_executor();
+fn call_contract_success() -> Result<()> {
+    let executor = pop_executor()?;
 
-    let mut contract = Contract::new(&executor, "call_test").expect("Failed to create contract");
-    contract.build(&executor).expect("Failed to build contract");
-    contract
-        .deploy(&executor, Some("new"), Some("false"))
-        .expect("Failed to deploy contract");
+    let mut contract = Contract::new(&executor, "call_test")?;
+    contract.build(&executor)?;
+    contract.deploy(&executor, Some("new"), Some("false"))?;
+    let addr = contract
+        .address
+        .as_ref()
+        .ok_or_else(|| anyhow!("Missing contract address after deploy"))?
+        .to_string();
+    let node_url = contract
+        .node_url()
+        .ok_or_else(|| anyhow!("Missing node URL after deploy"))?
+        .to_string();
 
     let params = CallContractParams {
         path: contract.path.to_string_lossy().to_string(),
-        contract: contract.address.clone().unwrap(),
+        contract: addr.clone(),
         message: "get".to_string(),
         args: None,
         value: None,
         execute: None,
         suri: Some("//Alice".to_string()),
-        url: Some(contract.node_url().unwrap().to_string()),
+        url: Some(node_url.clone()),
     };
 
-    let result = call_contract(&executor, params, None).unwrap();
-    assert_eq!(result.is_error, Some(false));
-    assert!(content_text(&result).contains("false"));
+    let result = call_contract(&executor, params, None)?;
+    assert!(is_success(&result));
+    assert!(text(&result)?.contains("false"));
+
+    // Call flip to mutate state
+    let flip_params = CallContractParams {
+        path: contract.path.to_string_lossy().to_string(),
+        contract: addr.clone(),
+        message: "flip".to_string(),
+        args: None,
+        value: None,
+        execute: Some(true),
+        suri: Some("//Alice".to_string()),
+        url: Some(node_url.clone()),
+    };
+    let flip_result = call_contract(&executor, flip_params, None)?;
+    assert!(is_success(&flip_result));
+
+    // Call get again - should now return true
+    let get_params = CallContractParams {
+        path: contract.path.to_string_lossy().to_string(),
+        contract: addr,
+        message: "get".to_string(),
+        args: None,
+        value: None,
+        execute: None,
+        suri: Some("//Alice".to_string()),
+        url: Some(node_url),
+    };
+    let get_result = call_contract(&executor, get_params, None)?;
+    assert!(is_success(&get_result));
+    assert!(text(&get_result)?.contains("true"));
+    Ok(())
 }

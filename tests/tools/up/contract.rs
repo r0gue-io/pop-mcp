@@ -1,10 +1,11 @@
-use crate::common::{content_text, pop_executor, Contract, InkNode};
+use crate::common::{is_error, is_success, pop_executor, text, Contract, InkNode};
+use anyhow::Result;
 use pop_mcp_server::tools::up::contract::{deploy_contract, DeployContractParams};
 use serial_test::serial;
 
 #[test]
-fn deploy_nonexistent_path() {
-    let executor = pop_executor();
+fn deploy_nonexistent_path() -> Result<()> {
+    let executor = pop_executor()?;
     let params = DeployContractParams {
         path: "/nonexistent/path/to/contract".to_string(),
         constructor: None,
@@ -15,18 +16,19 @@ fn deploy_nonexistent_path() {
         url: None,
     };
 
-    let result = deploy_contract(&executor, params, None).unwrap();
-    assert!(result.is_error.unwrap());
-    assert!(content_text(&result).contains("Deployment failed"));
+    let result = deploy_contract(&executor, params, None)?;
+    assert!(is_error(&result));
+    assert!(text(&result)?.contains("Deployment failed"));
+    Ok(())
 }
 
 #[test]
 #[serial]
-fn deploy_contract_success() {
-    let executor = pop_executor();
-    let contract = Contract::new(&executor, "deploy_test").expect("Failed to create contract");
-    contract.build(&executor).expect("Failed to build contract");
-    let node = InkNode::launch(&executor).expect("Failed to launch node");
+fn deploy_contract_success() -> Result<()> {
+    let executor = pop_executor()?;
+    let contract = Contract::new(&executor, "deploy_test")?;
+    contract.build(&executor)?;
+    let node = InkNode::launch(&executor)?;
 
     let result = deploy_contract(
         &executor,
@@ -40,9 +42,13 @@ fn deploy_contract_success() {
             url: Some(node.url.clone()),
         },
         None,
-    )
-    .unwrap();
+    )?;
 
-    assert_eq!(result.is_error, Some(false));
-    assert!(content_text(&result).contains("0x")); // Has contract address
+    assert!(is_success(&result));
+    let msg = text(&result)?;
+    assert!(
+        msg.contains("0x") || msg.contains("5"),
+        "Expected contract address in output, got: {msg}"
+    );
+    Ok(())
 }

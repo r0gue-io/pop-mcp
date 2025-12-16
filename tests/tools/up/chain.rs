@@ -1,12 +1,13 @@
 use crate::common::{is_port_in_use, pop_executor, InkNode};
+use anyhow::Result;
 use serial_test::serial;
 
 #[test]
 #[serial]
-fn up_ink_node_launches_node() {
-    let executor = pop_executor();
+fn up_ink_node_launches_node() -> Result<()> {
+    let executor = pop_executor()?;
 
-    let node = InkNode::launch(&executor).expect("Failed to launch ink-node");
+    let node = InkNode::launch(&executor)?;
 
     assert_eq!(node.url, "ws://localhost:9944");
     assert!(
@@ -15,4 +16,5 @@ fn up_ink_node_launches_node() {
     );
 
     // Node cleaned up automatically when `node` drops
+    Ok(())
 }

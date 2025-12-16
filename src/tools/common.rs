@@ -20,7 +20,6 @@ pub fn extract_text(result: &CallToolResult) -> Option<String> {
     })
 }
 
-#[cfg(any(test, feature = "pop-e2e"))]
 pub fn content_text(result: &CallToolResult) -> String {
     extract_text(result).expect("CallToolResult must contain text content")
 }

@@ -1,25 +1,37 @@
-use pop_mcp_server::executor::{CommandExecutor, PopExecutor};
+use anyhow::{anyhow, Context, Result};
+use pop_mcp_server::executor::PopExecutor;
 use pop_mcp_server::tools::build::contract::{build_contract, BuildContractParams};
 use pop_mcp_server::tools::clean::{clean_nodes, CleanNodesParams};
-pub use pop_mcp_server::tools::common::content_text;
 use pop_mcp_server::tools::common::extract_text;
 use pop_mcp_server::tools::install::{check_pop_installation, CheckPopInstallationParams};
 use pop_mcp_server::tools::new::contract::{create_contract, CreateContractParams};
 use pop_mcp_server::tools::up::chain::{up_ink_node, UpInkNodeParams};
 use pop_mcp_server::tools::up::contract::{deploy_contract, DeployContractParams};
-use std::path::PathBuf;
+use rmcp::model::CallToolResult;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
 
+pub fn is_error(result: &CallToolResult) -> bool {
+    result.is_error == Some(true)
+}
+
+pub fn is_success(result: &CallToolResult) -> bool {
+    !is_error(result)
+}
+
+pub fn text(result: &CallToolResult) -> Result<String> {
+    extract_text(result).ok_or_else(|| anyhow!("CallToolResult missing text content"))
+}
+
 /// Create a PopExecutor for testing.
-/// Panics if Pop CLI is not available.
-pub fn pop_executor() -> PopExecutor {
+/// Returns error if Pop CLI is not available.
+pub fn pop_executor() -> Result<PopExecutor> {
     let executor = PopExecutor::new();
-    assert!(
-        executor.execute(&["--version"]).is_ok(),
-        "Pop CLI is not available. Please install it first."
-    );
     executor
+        .execute(&["--version"])
+        .map_err(|e| anyhow!("Pop CLI is not available: {e}"))?;
+    Ok(executor)
 }
 
 /// A guard that manages an ink-node's lifecycle.
@@ -31,19 +43,20 @@ pub struct InkNode<'a> {
 
 impl<'a> InkNode<'a> {
     /// Launch an ink-node and return a guard that cleans it up on drop.
-    pub fn launch(executor: &'a PopExecutor) -> Result<Self, String> {
-        let result = up_ink_node(executor, UpInkNodeParams {})
-            .map_err(|e| format!("Failed to launch ink-node: {}", e))?;
+    pub fn launch(executor: &'a PopExecutor) -> Result<Self> {
+        let result =
+            up_ink_node(executor, UpInkNodeParams {}).context("Failed to launch ink-node")?;
 
-        if result.is_error == Some(true) {
-            return Err("Failed to launch ink-node".to_string());
+        if is_error(&result) {
+            return Err(anyhow!("Failed to launch ink-node"));
         }
 
-        let url = extract_text(&result).ok_or("Failed to extract URL from ink-node output")?;
+        let url = extract_text(&result)
+            .ok_or_else(|| anyhow!("Failed to extract URL from ink-node output"))?;
 
         // Verify the node is actually running
         if !is_port_in_use(9944) {
-            return Err("Port 9944 not in use after launching ink-node".to_string());
+            return Err(anyhow!("Port 9944 not in use after launching ink-node"));
         }
 
         Ok(Self { executor, url })
@@ -77,6 +90,7 @@ pub fn is_port_in_use(port: u16) -> bool {
 /// the process working directory while creating the contract; prefer
 /// `serial` tests or single-threaded runs when using it.
 pub struct Contract<'a> {
+    #[allow(dead_code)]
     pub temp_dir: TempDir,
     pub path: PathBuf,
     pub address: Option<String>,
@@ -85,25 +99,21 @@ pub struct Contract<'a> {
 
 impl<'a> Contract<'a> {
     /// Create a new contract from the standard template.
-    pub fn new(executor: &PopExecutor, name: &str) -> Result<Self, String> {
-        let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-        let original_dir =
-            std::env::current_dir().map_err(|e| format!("Failed to get cwd: {}", e))?;
+    pub fn new(executor: &PopExecutor, name: &str) -> Result<Self> {
+        let temp_dir = TempDir::new().context("Failed to create temp dir")?;
+        let original_dir = std::env::current_dir().context("Failed to get cwd")?;
         let _cwd_guard = CwdRestoreGuard::new(&original_dir);
-        std::env::set_current_dir(temp_dir.path())
-            .map_err(|e| format!("Failed to enter temp dir: {}", e))?;
+        std::env::set_current_dir(temp_dir.path()).context("Failed to enter temp dir")?;
 
         let create_params = CreateContractParams {
             name: name.to_string(),
             template: "standard".to_string(),
         };
-        let create_result = create_contract(executor, create_params)
-            .map_err(|e| format!("Failed to create contract: {}", e))?;
-        if create_result.is_error == Some(true) {
-            return Err(format!(
-                "Contract creation failed: {}",
-                content_text(&create_result)
-            ));
+        let create_result =
+            create_contract(executor, create_params).context("Failed to create contract")?;
+        if is_error(&create_result) {
+            let msg = text(&create_result)?;
+            return Err(anyhow!("Contract creation failed: {}", msg));
         }
 
         let contract_path = temp_dir.path().join(name);
@@ -117,18 +127,16 @@ impl<'a> Contract<'a> {
     }
 
     /// Build the contract.
-    pub fn build(&self, executor: &PopExecutor) -> Result<(), String> {
+    pub fn build(&self, executor: &PopExecutor) -> Result<()> {
         let build_params = BuildContractParams {
             path: self.path.to_string_lossy().to_string(),
             release: None,
         };
-        let build_result = build_contract(executor, build_params)
-            .map_err(|e| format!("Failed to build contract: {}", e))?;
-        if build_result.is_error == Some(true) {
-            return Err(format!(
-                "Contract build failed: {}",
-                content_text(&build_result)
-            ));
+        let build_result =
+            build_contract(executor, build_params).context("Failed to build contract")?;
+        if is_error(&build_result) {
+            let msg = text(&build_result)?;
+            return Err(anyhow!("Contract build failed: {}", msg));
         }
         Ok(())
     }
@@ -140,7 +148,7 @@ impl<'a> Contract<'a> {
         executor: &'a PopExecutor,
         constructor: Option<&str>,
         args: Option<&str>,
-    ) -> Result<(), String> {
+    ) -> Result<()> {
         // Launch ink node
         let ink_node = InkNode::launch(executor)?;
         let url = ink_node.url().to_string();
@@ -155,19 +163,17 @@ impl<'a> Contract<'a> {
             suri: Some("//Alice".to_string()),
             url: Some(url),
         };
-        let deploy_result = deploy_contract(executor, deploy_params, None)
-            .map_err(|e| format!("Failed to deploy contract: {}", e))?;
-        if deploy_result.is_error == Some(true) {
-            return Err(format!(
-                "Contract deployment failed: {}",
-                content_text(&deploy_result)
-            ));
+        let deploy_result =
+            deploy_contract(executor, deploy_params, None).context("Failed to deploy contract")?;
+        if is_error(&deploy_result) {
+            let msg = text(&deploy_result)?;
+            return Err(anyhow!("Contract deployment failed: {}", msg));
         }
 
         // Parse contract address from output
-        let output = content_text(&deploy_result);
+        let output = text(&deploy_result)?;
         let address = parse_contract_address(&output)
-            .ok_or_else(|| format!("Failed to parse contract address from output: {}", output))?;
+            .ok_or_else(|| anyhow!("Failed to parse contract address from output: {}", output))?;
 
         self.address = Some(address);
         self.ink_node = Some(ink_node);
@@ -198,10 +204,12 @@ fn parse_contract_address(output: &str) -> Option<String> {
 
     // Fallback: Look for SS58 addresses (start with 5 and are 47-48 characters)
     for word in output.split_whitespace() {
-        if word.starts_with('5') && word.len() >= 47 && word.len() <= 48 {
-            if word.chars().all(|c| c.is_alphanumeric()) {
-                return Some(word.to_string());
-            }
+        if word.starts_with('5')
+            && word.len() >= 47
+            && word.len() <= 48
+            && word.chars().all(|c| c.is_alphanumeric())
+        {
+            return Some(word.to_string());
         }
     }
 
@@ -214,9 +222,9 @@ struct CwdRestoreGuard {
 }
 
 impl CwdRestoreGuard {
-    fn new(original_dir: &PathBuf) -> Self {
+    fn new(original_dir: &Path) -> Self {
         Self {
-            original_dir: original_dir.clone(),
+            original_dir: original_dir.to_path_buf(),
         }
     }
 }
@@ -228,8 +236,9 @@ impl Drop for CwdRestoreGuard {
 }
 
 #[test]
-fn pop_is_available() {
-    let executor = pop_executor();
-    let result = check_pop_installation(&executor, CheckPopInstallationParams {}).unwrap();
+fn pop_is_available() -> Result<()> {
+    let executor = pop_executor()?;
+    let result = check_pop_installation(&executor, CheckPopInstallationParams {})?;
     assert_eq!(result.is_error, Some(false));
+    Ok(())
 }

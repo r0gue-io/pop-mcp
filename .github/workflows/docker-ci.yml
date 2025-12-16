@@ -1,0 +1,67 @@
+name: docker-ci
+
+permissions:
+  contents: read
+  packages: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      docker_image:
+        description: Docker image to build
+        required: false
+        type: string
+      rust_version:
+        description: Rust version to use
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      docker_image:
+        description: Docker image to build
+        required: true
+        type: string
+      rust_version:
+        description: Rust version to use
+        required: true
+        type: string
+
+jobs:
+  build-ci-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup
+        id: setup
+        run: |
+          set -xeuo pipefail
+          DOCKER_IMAGE="${{ inputs.docker_image }}"
+          echo "DOCKER_IMAGE=$DOCKER_IMAGE" >> $GITHUB_ENV
+          if docker manifest inspect "$DOCKER_IMAGE" > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push CI image
+        if: steps.setup.outputs.exists == 'false'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.ci
+          push: true
+          tags: ${{ env.DOCKER_IMAGE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: RUST_TOOLCHAIN=${{ inputs.rust_version }}

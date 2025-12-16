@@ -1,113 +1,178 @@
-name: CI
+name: ci
 
 permissions:
   contents: read
+  packages: read
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-
-concurrency:
-  group: ci-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
 
 env:
   CARGO_TERM_COLOR: always
+  GITHUB_ACTOR: pop-mcp
   CARGO_INCREMENTAL: 1
   RUST_BACKTRACE: 1
   RUSTFLAGS: "-Dwarnings"
-  DO_NOT_TRACK: 1
+  RUSTDOCFLAGS: "-Dwarnings"
+
+concurrency:
+  # Cancel any in-progress jobs for the same pull request or branch
+  group: ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  fmt:
-    name: Format
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.out.outputs.image }}
+      rust_version: ${{ steps.out.outputs.rust_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set environment variables
+        id: out
+        env:
+          HASH: ${{ hashFiles('Dockerfile.ci') }}
+        run: |
+          set -xeuo pipefail
+          RUST_VERSION=$(yq -r '.toolchain.channel' rust-toolchain.toml)
+          echo "rust_version=$RUST_VERSION" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}:${RUST_VERSION}-${HASH}" >> "$GITHUB_OUTPUT"
+
+  prepare-ci-image:
+    needs:
+      - setup
+    uses: ./.github/workflows/docker-ci.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      docker_image: ${{ needs.setup.outputs.image }}
+      rust_version: ${{ needs.setup.outputs.rust_version }}
+
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
+        uses: actions-rs/toolchain@v1
         with:
+          toolchain: nightly
+          profile: minimal
           components: rustfmt
+          override: true
 
       - name: Check formatting
         run: cargo +nightly fmt --all -- --check
 
-  check:
-    name: Check
+  build:
+    needs:
+      - setup
+      - lint
+      - prepare-ci-image
     runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.setup.outputs.image }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust dependencies
+      - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
+          cache-all-crates: true
           shared-key: shared-${{ github.head_ref || github.ref_name }}
 
-      - name: Check
+      - name: Check no default features
+        run: cargo check --locked --no-default-features
+
+      - name: Check all features
         run: cargo check --locked --all-features
 
+      - name: Check default features
+        run: cargo check --locked
+
   clippy:
-    name: Clippy
-    needs: [check]
+    needs:
+      - build
+      - setup
     runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.setup.outputs.image }}
+    permissions:
+      checks: write
+      packages: read
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - name: Cache Rust dependencies
+      - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
           save-if: false
           shared-key: shared-${{ github.head_ref || github.ref_name }}
 
-      - name: Clippy
-        run: cargo clippy --locked --all-features --all-targets
+      - name: Annotate with Clippy warnings
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-targets -- -D warnings
 
-  test:
-    name: Test
-    needs: [fmt, check]
+  docker:
+    if: hashFiles('Dockerfile') != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rust-src
-          targets: wasm32-unknown-unknown
+      - uses: docker/build-push-action@v5
 
-      - name: Cache Rust dependencies
+  docs:
+    needs:
+      - setup
+      - build
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.setup.outputs.image }}
+    permissions:
+      checks: write
+      packages: read
+    env:
+      # We cannot propagate the "missing_docs" flag, as otherwise other tests fail.
+      RUSTFLAGS: "-Dwarnings -Dmissing_docs"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: false
+          shared-key: shared-docs-${{ github.head_ref || github.ref_name }}
+
+      - name: Check no default features
+        run: cargo doc --locked --no-deps
+
+  documentation-tests:
+    needs:
+      - setup
+      - build
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.setup.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: false
           shared-key: shared-${{ github.head_ref || github.ref_name }}
 
-      - name: Cache pop assets
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pop
-          key: pop-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-
-      - name: Install toolchain deps
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler clang cmake
-
-      - name: Install pop
-        run: cargo install --force --locked pop-cli
-
-      - name: Bootstrap pop binaries
-        run: pop install -y
-
-      - name: Smoke test
-        run: pop --version
-
-      - name: Run tests
-        run: cargo test --locked
+      - name: Run doc tests
+        run: cargo test --locked --doc

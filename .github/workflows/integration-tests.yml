@@ -1,48 +1,84 @@
-name: Integration Tests
+name: integration tests
 
 permissions:
   contents: read
+  packages: read
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-
-concurrency:
-  group: integration-tests-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
 
 env:
   CARGO_TERM_COLOR: always
+  GITHUB_ACTOR: pop-mcp
   CARGO_INCREMENTAL: 1
   RUST_BACKTRACE: 1
   RUSTFLAGS: "-Dwarnings"
-  DO_NOT_TRACK: 1
+  RUSTDOCFLAGS: "-Dwarnings"
+
+concurrency:
+  # Cancel any in-progress jobs for the same pull request or branch
+  group: integration-tests-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   integration-tests:
-    name: Integration Tests (ubuntu-latest)
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Free up space on runner
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -xeuo pipefail
+          sudo rm -rf /usr/local/lib/android &
+          sudo rm -rf /usr/share/dotnet &
+          sudo rm -rf /usr/share/swift &
+          if command -v docker &> /dev/null; then
+            sudo docker image prune -af &
+          fi
+          sudo apt-get clean &
+          wait
 
-      - name: Cache Rust dependencies
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          default: true
+          target: wasm32-unknown-unknown
+          components: rust-src, clippy
+
+      - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: integration-${{ github.head_ref || github.ref_name }}
+          save-if: false
+          shared-key: shared-linux-pop-e2e-${{ github.head_ref || github.ref_name }}
+
+      - name: Install packages (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler clang cmake
+          protoc --version
 
       - name: Cache pop assets
         uses: actions/cache@v4
         with:
           path: ~/.cache/pop
           key: pop-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-
-      - name: Install toolchain deps
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler clang cmake
 
       - name: Install pop
         run: cargo install --locked --force pop-cli
@@ -51,4 +87,7 @@ jobs:
         run: pop install -y
 
       - name: Run integration tests
-        run: cargo test --locked --tests --features pop-e2e
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cargo test --locked --features pop-e2e

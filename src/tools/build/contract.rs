@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::PopMcpResult;
 use crate::executor::CommandExecutor;
-use crate::tools::helpers::{error_result, success_result};
+use crate::tools::common::{error_result, success_result};
 
 // Parameters
 
@@ -59,9 +59,6 @@ pub fn build_contract<E: CommandExecutor>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::executor::PopExecutor;
-    use crate::tools::helpers::{content_text, create_standard_contract, pop_available};
-    use serial_test::serial;
 
     #[test]
     fn validate_rejects_empty_path() {
@@ -80,43 +77,5 @@ mod tests {
         };
         let args = build_build_contract_args(&params);
         assert_eq!(args, vec!["build", "--path", "./my_contract", "--release"]);
-    }
-
-    #[test]
-    fn build_nonexistent_path() {
-        let executor = PopExecutor::new();
-        let params = BuildContractParams {
-            path: "/nonexistent/path/to/contract".to_string(),
-            release: None,
-        };
-
-        let result = build_contract(&executor, params).unwrap();
-        assert!(result.is_error.unwrap_or(false));
-
-        let text = content_text(&result);
-        assert!(text.contains("Build failed"));
-    }
-
-    #[test]
-    #[serial]
-    fn build_contract_success_creates_artifacts() {
-        let executor = PopExecutor::new();
-        if !pop_available(&executor) {
-            return;
-        }
-
-        let fixture = create_standard_contract(&executor, "build_test");
-
-        let build_params = BuildContractParams {
-            path: fixture.path.to_string_lossy().to_string(),
-            release: None,
-        };
-
-        let result = build_contract(&executor, build_params).unwrap();
-        assert!(result.is_error.is_some());
-        assert!(!content_text(&result).is_empty());
-
-        // Verify build artifacts exist
-        assert!(fixture.path.join("target/ink").exists());
     }
 }

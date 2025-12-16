@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::PopMcpResult;
 use crate::executor::CommandExecutor;
 
-use super::helpers::{error_result, success_result};
+use super::common::{error_result, success_result};
 
 // Parameters
 
@@ -55,66 +55,12 @@ pub fn convert_address<E: CommandExecutor>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::executor::{test_utils::MockExecutor, PopExecutor};
-    use crate::tools::helpers::{content_text, pop_available};
 
     #[test]
     fn convert_empty_address_fails_before_execution() {
-        let executor = MockExecutor::success("Should not reach here");
         let params = ConvertAddressParams {
             address: "".to_string(),
         };
-        assert!(convert_address(&executor, params).is_err());
-    }
-
-    #[test]
-    fn convert_ethereum_to_substrate() {
-        let executor = PopExecutor::new();
-        if !pop_available(&executor) {
-            return;
-        }
-
-        let params = ConvertAddressParams {
-            address: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e".to_string(),
-        };
-
-        let result = convert_address(&executor, params).unwrap();
-        assert!(!result.is_error.unwrap_or(true));
-        assert!(!content_text(&result).is_empty());
-    }
-
-    #[test]
-    fn convert_substrate_to_ethereum() {
-        let executor = PopExecutor::new();
-        if !pop_available(&executor) {
-            return;
-        }
-
-        // Substrate address derived from 0x742d35Cc6634C0532925a3b844Bc454e4438f44e
-        let params = ConvertAddressParams {
-            address: "13dKz82CEiU7fKfhfQ5aLpdbXHApLfJH5Z6y2RTZpRwKiNhX".to_string(),
-        };
-
-        let result = convert_address(&executor, params).unwrap();
-        assert!(!result.is_error.unwrap_or(true));
-        assert!(content_text(&result)
-            .to_lowercase()
-            .contains("0x742d35cc6634c0532925a3b844bc454e4438f44e"));
-    }
-
-    #[test]
-    fn convert_invalid_address() {
-        let executor = PopExecutor::new();
-        if !pop_available(&executor) {
-            return;
-        }
-
-        let params = ConvertAddressParams {
-            address: "not_a_valid_address".to_string(),
-        };
-
-        let result = convert_address(&executor, params).unwrap();
-        assert!(result.is_error.unwrap_or(false));
-        assert!(content_text(&result).contains("Address conversion failed"));
+        assert!(params.validate().is_err());
     }
 }

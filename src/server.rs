@@ -68,9 +68,10 @@ impl PopMcpServer {
     #[tool(description = "List all available ink! contract templates")]
     async fn list_templates(
         &self,
-        Parameters(()): Parameters<()>,
+        Parameters(_): Parameters<ListTemplatesParams>,
     ) -> Result<CallToolResult, McpError> {
-        tools::list_templates(()).map_err(|e| McpError::internal_error(e.to_string(), None))
+        tools::list_templates(ListTemplatesParams {})
+            .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
     #[tool(description = "Create a new ink! smart contract from a template using Pop CLI")]
@@ -140,14 +141,14 @@ impl PopMcpServer {
     )]
     async fn up_ink_node(
         &self,
-        Parameters(()): Parameters<()>,
+        Parameters(_): Parameters<UpInkNodeParams>,
     ) -> Result<CallToolResult, McpError> {
-        let result = tools::up_ink_node(&self.executor)
+        let result = tools::up_ink_node(&self.executor, UpInkNodeParams {})
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 
         // Store the WebSocket URL for later use (result contains the URL on success)
         if result.is_error != Some(true) {
-            if let Some(url) = tools::helpers::extract_text(&result) {
+            if let Some(url) = tools::common::extract_text(&result) {
                 if let Ok(mut stored_url) = self.node_websocket_url.lock() {
                     *stored_url = Some(url);
                 }
@@ -160,9 +161,9 @@ impl PopMcpServer {
     #[tool(description = "Stop all running local ink! nodes")]
     async fn clean_nodes(
         &self,
-        Parameters(()): Parameters<()>,
+        Parameters(_): Parameters<CleanNodesParams>,
     ) -> Result<CallToolResult, McpError> {
-        tools::clean_nodes(&self.executor)
+        tools::clean_nodes(&self.executor, CleanNodesParams {})
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
@@ -288,5 +289,21 @@ mod tests {
         // Verify retrieval
         let url = server.get_stored_url();
         assert_eq!(url, Some("ws://localhost:9944".to_string()));
+    }
+
+    #[test]
+    fn all_tool_schemas_have_type_object() {
+        // Claude Code requires all tool inputSchemas to have "type": "object".
+        // Using () as Parameters type generates {"const": null, "nullable": true}
+        // which breaks Claude Code's MCP client. Always use empty structs instead.
+        let server = PopMcpServer::new();
+        let tools = server.tool_router.list_all();
+
+        for tool in tools {
+            let schema_value = serde_json::to_value(&tool.input_schema).unwrap();
+            let schema_type = schema_value.get("type").and_then(|v| v.as_str());
+
+            assert_eq!(schema_type, Some("object"),);
+        }
     }
 }

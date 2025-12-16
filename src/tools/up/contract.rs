@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::PopMcpResult;
 use crate::executor::CommandExecutor;
-use crate::tools::helpers::{error_result, success_result};
+use crate::tools::common::{error_result, success_result};
 
 // Parameters
 
@@ -92,8 +92,6 @@ pub fn deploy_contract<E: CommandExecutor>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::executor::{test_utils::MockExecutor, PopExecutor};
-    use crate::tools::helpers::{content_text, create_standard_contract, pop_available};
 
     #[test]
     fn build_args_variants() {
@@ -169,53 +167,5 @@ mod tests {
             let args = build_deploy_contract_args(&case.params, case.stored_url);
             assert_eq!(args, case.expected, "case {}", case.name);
         }
-    }
-
-    #[test]
-    fn deploy_nonexistent_path() {
-        let executor = PopExecutor::new();
-        if !pop_available(&executor) {
-            return;
-        }
-        let params = DeployContractParams {
-            path: "/nonexistent/path/to/contract".to_string(),
-            constructor: None,
-            args: None,
-            value: None,
-            execute: None,
-            suri: None,
-            url: None,
-        };
-
-        let result = deploy_contract(&executor, params, None).unwrap();
-        assert!(result.is_error.unwrap());
-
-        let text = content_text(&result);
-        assert!(text.contains("Deployment failed"));
-    }
-
-    #[test]
-    fn deploy_success_mock() {
-        let pop_exec = PopExecutor::new();
-        if !pop_available(&pop_exec) {
-            return;
-        }
-
-        let executor = MockExecutor::success("Deployment OK");
-        let contract = create_standard_contract(&pop_exec, "deploy_success");
-        let params = DeployContractParams {
-            path: contract.path.to_string_lossy().to_string(),
-            constructor: Some("new".to_string()),
-            args: Some("42 true".to_string()),
-            value: Some("100".to_string()),
-            execute: Some(true),
-            suri: Some("//Alice".to_string()),
-            url: Some("ws://localhost:9944".to_string()),
-        };
-
-        let result = deploy_contract(&executor, params, None).unwrap();
-        assert!(!result.is_error.unwrap());
-        let text = content_text(&result);
-        assert!(text.contains("Deployment OK"));
     }
 }

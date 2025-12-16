@@ -1,10 +1,15 @@
 //! Chain/node management (pop up ink-node)
 
 use rmcp::model::CallToolResult;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
 use crate::error::PopMcpResult;
 use crate::executor::CommandExecutor;
-use crate::tools::helpers::{error_result, success_result};
+use crate::tools::common::{error_result, success_result};
+
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+pub struct UpInkNodeParams {}
 
 /// Parse the output to extract WebSocket URL
 ///
@@ -26,7 +31,10 @@ fn parse_ws_url(output: &str) -> Option<String> {
 /// Execute up_ink_node tool (pop up ink-node)
 ///
 /// Returns the websocket URL on success (e.g., "ws://localhost:9944")
-pub fn up_ink_node<E: CommandExecutor>(executor: &E) -> PopMcpResult<CallToolResult> {
+pub fn up_ink_node<E: CommandExecutor>(
+    executor: &E,
+    _params: UpInkNodeParams,
+) -> PopMcpResult<CallToolResult> {
     let args = ["up", "ink-node", "-y", "--detach"];
 
     match executor.execute(&args) {
@@ -41,9 +49,6 @@ pub fn up_ink_node<E: CommandExecutor>(executor: &E) -> PopMcpResult<CallToolRes
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::executor::PopExecutor;
-    use crate::tools::clean::clean_nodes;
-    use crate::tools::helpers::{extract_text, pop_available, test_utils::is_port_in_use};
 
     #[test]
     fn parse_ws_url_extracts_localhost_url() {
@@ -70,30 +75,5 @@ mod tests {
         let output = "Some error occurred";
         let url = parse_ws_url(output);
         assert_eq!(url, None);
-    }
-
-    #[test]
-    fn up_ink_node_launches_node() {
-        let executor = PopExecutor::new();
-        if !pop_available(&executor) {
-            return;
-        }
-
-        // Launch ink-node
-        let result = up_ink_node(&executor).unwrap();
-        assert!(!result.is_error.unwrap());
-
-        // Verify result contains the websocket URL
-        let url = extract_text(&result).unwrap();
-        assert_eq!(url, "ws://localhost:9944");
-
-        // Verify port 9944 is in use
-        assert!(
-            is_port_in_use(9944),
-            "Port 9944 should be in use after launch"
-        );
-
-        // Clean up
-        let _ = clean_nodes(&executor);
     }
 }

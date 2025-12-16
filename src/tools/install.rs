@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::PopMcpResult;
 use crate::executor::CommandExecutor;
 
-use super::helpers::{error_result, success_result};
+use super::common::{error_result, success_result};
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct CheckPopInstallationParams {}
@@ -79,20 +79,14 @@ pub fn install_pop_instructions(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::executor::test_utils::MockExecutor;
 
+    #[cfg(feature = "pop-e2e")]
     #[test]
     fn check_pop_installation_installed() {
-        let executor = MockExecutor::success("pop 0.5.0");
+        use crate::executor::PopExecutor;
+        let executor = PopExecutor::new();
         let result = check_pop_installation(&executor, CheckPopInstallationParams {}).unwrap();
         assert!(!result.is_error.unwrap_or(true));
-    }
-
-    #[test]
-    fn check_pop_installation_not_installed() {
-        let executor = MockExecutor::failure("command not found");
-        let result = check_pop_installation(&executor, CheckPopInstallationParams {}).unwrap();
-        assert!(result.is_error.unwrap_or(false));
     }
 
     #[test]

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::PopMcpResult;
 use crate::executor::CommandExecutor;
-use crate::tools::helpers::{error_result, success_result};
+use crate::tools::common::{error_result, success_result};
 
 // Parameters
 
@@ -59,9 +59,6 @@ pub fn test_contract<E: CommandExecutor>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::executor::PopExecutor;
-    use crate::tools::helpers::{content_text, create_standard_contract, pop_available};
-    use serial_test::serial;
 
     #[test]
     fn validate_rejects_empty_path() {
@@ -89,66 +86,6 @@ mod tests {
             e2e: true,
         };
         let args = build_test_contract_args(&params);
-        assert!(args.contains(&"--e2e"));
-    }
-
-    #[test]
-    #[serial]
-    fn contract_success_and_e2e() {
-        let executor = PopExecutor::new();
-        if !pop_available(&executor) {
-            return;
-        }
-
-        let contract = create_standard_contract(&executor, "test_contract_e2e");
-
-        // Normal test
-        let params = TestContractParams {
-            path: contract.path.to_string_lossy().to_string(),
-            e2e: false,
-        };
-        let result = test_contract(&executor, params).unwrap();
-        assert_eq!(result.is_error, Some(false));
-        assert!(content_text(&result).contains("Tests completed!"));
-
-        // E2E test
-        let params_e2e = TestContractParams {
-            path: contract.path.to_string_lossy().to_string(),
-            e2e: true,
-        };
-        let result_e2e = test_contract(&executor, params_e2e).unwrap();
-        assert_eq!(result_e2e.is_error, Some(false));
-        assert!(content_text(&result_e2e).contains("Tests completed!"));
-    }
-
-    #[test]
-    fn contract_failure() {
-        let executor = PopExecutor::new();
-        let params = TestContractParams {
-            path: "./my_contract".to_string(),
-            e2e: false,
-        };
-
-        let result = test_contract(&executor, params).unwrap();
-        assert!(result.is_error.unwrap());
-
-        let text = content_text(&result);
-        assert!(text.contains("Tests failed"));
-    }
-
-    #[test]
-    #[serial]
-    fn contract_nonexistent_path() {
-        let executor = PopExecutor::new();
-        let params = TestContractParams {
-            path: "/nonexistent/path/to/contract".to_string(),
-            e2e: false,
-        };
-
-        let result = test_contract(&executor, params).unwrap();
-        assert!(result.is_error.unwrap());
-
-        let text = content_text(&result);
-        assert!(text.contains("Tests failed"));
+        assert_eq!(args, vec!["test", "--path", "./my_contract", "--e2e"]);
     }
 }

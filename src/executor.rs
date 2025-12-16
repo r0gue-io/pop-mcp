@@ -91,39 +91,6 @@ impl CommandExecutor for PopExecutor {
 }
 
 #[cfg(test)]
-pub mod test_utils {
-    use super::*;
-
-    /// Mock executor for testing tool functions
-    pub struct MockExecutor {
-        response: Result<String, String>,
-    }
-
-    impl MockExecutor {
-        pub fn success(output: &str) -> Self {
-            Self {
-                response: Ok(output.to_string()),
-            }
-        }
-
-        pub fn failure(error: &str) -> Self {
-            Self {
-                response: Err(error.to_string()),
-            }
-        }
-    }
-
-    impl CommandExecutor for MockExecutor {
-        fn execute(&self, _args: &[&str]) -> PopMcpResult<String> {
-            match &self.response {
-                Ok(output) => Ok(output.clone()),
-                Err(msg) => Err(PopMcpError::CommandExecution(msg.clone())),
-            }
-        }
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
 

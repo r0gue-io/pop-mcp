@@ -1,0 +1,54 @@
+name: Integration Tests
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: integration-tests-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 1
+  RUST_BACKTRACE: 1
+  RUSTFLAGS: "-Dwarnings"
+  DO_NOT_TRACK: 1
+
+jobs:
+  integration-tests:
+    name: Integration Tests (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: integration-${{ github.head_ref || github.ref_name }}
+
+      - name: Cache pop assets
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pop
+          key: pop-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install toolchain deps
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler clang cmake
+
+      - name: Install pop
+        run: cargo install --locked pop-cli
+
+      - name: Bootstrap pop binaries
+        run: pop install -y
+
+      - name: Run integration tests
+        run: cargo test --locked --tests --features pop-e2e

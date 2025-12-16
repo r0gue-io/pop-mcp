@@ -10,8 +10,8 @@ use crate::executor::CommandExecutor;
 pub mod build;
 pub mod call;
 pub mod clean;
+pub mod common;
 pub mod convert;
-pub mod helpers;
 pub mod install;
 pub mod new;
 pub mod test;
@@ -19,16 +19,18 @@ pub mod up;
 
 pub use build::contract::{build_build_contract_args, build_contract, BuildContractParams};
 pub use call::contract::{build_call_contract_args, call_contract, CallContractParams};
-pub use clean::clean_nodes;
+pub use clean::{clean_nodes, CleanNodesParams};
 pub use convert::{convert_address, ConvertAddressParams};
 pub use install::{
     check_pop_installation, install_pop_instructions, CheckPopInstallationParams,
     InstallPopInstructionsParams,
 };
-pub use new::contract::{build_create_contract_args, create_contract, CreateContractParams};
-pub use new::list_templates;
+pub use new::contract::{
+    build_create_contract_args, create_contract, list_templates, CreateContractParams,
+    ListTemplatesParams,
+};
 pub use test::contract::{build_test_contract_args, test_contract, TestContractParams};
-pub use up::chain::up_ink_node;
+pub use up::chain::{up_ink_node, UpInkNodeParams};
 pub use up::contract::{build_deploy_contract_args, deploy_contract, DeployContractParams};
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
@@ -50,10 +52,10 @@ pub fn pop_help<E: CommandExecutor>(
     };
 
     match executor.execute(&args) {
-        Ok(output) => Ok(helpers::success_result(format!(
+        Ok(output) => Ok(common::success_result(format!(
             "Pop CLI Help:\n\n{}",
             output
         ))),
-        Err(e) => Ok(helpers::error_result(format!("Failed to get help: {}", e))),
+        Err(e) => Ok(common::error_result(format!("Failed to get help: {}", e))),
     }
 }

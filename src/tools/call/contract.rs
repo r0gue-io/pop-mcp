@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::PopMcpResult;
 use crate::executor::CommandExecutor;
-use crate::tools::helpers::{error_result, success_result};
+use crate::tools::common::{error_result, success_result};
 
 // Parameters
 
@@ -81,6 +81,22 @@ pub fn build_call_contract_args<'a>(
     args
 }
 
+/// Check if output contains error indicators from pop CLI
+fn is_error_output(output: &str) -> bool {
+    let error_indicators = [
+        "Unable to",
+        "Error:",
+        "error:",
+        "Failed to",
+        "failed to",
+        "not connected",
+        "Contract not found",
+    ];
+    error_indicators
+        .iter()
+        .any(|indicator| output.contains(indicator))
+}
+
 /// Execute call_contract tool
 pub fn call_contract<E: CommandExecutor>(
     executor: &E,
@@ -90,10 +106,17 @@ pub fn call_contract<E: CommandExecutor>(
     let args = build_call_contract_args(&params, stored_url);
 
     match executor.execute(&args) {
-        Ok(output) => Ok(success_result(format!(
-            "Contract call successful!\n\n{}",
-            output
-        ))),
+        Ok(output) => {
+            // Check if the output contains error indicators even if exit code was 0
+            if is_error_output(&output) {
+                Ok(error_result(format!("Contract call failed:\n\n{}", output)))
+            } else {
+                Ok(success_result(format!(
+                    "Contract call successful!\n\n{}",
+                    output
+                )))
+            }
+        }
         Err(e) => Ok(error_result(format!("Contract call failed: {}", e))),
     }
 }
@@ -101,8 +124,6 @@ pub fn call_contract<E: CommandExecutor>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::executor::PopExecutor;
-    use crate::tools::helpers::{content_text, create_standard_contract, pop_available};
 
     #[test]
     fn build_args_variants() {
@@ -207,32 +228,5 @@ mod tests {
             let args = build_call_contract_args(&case.params, case.stored_url);
             assert_eq!(args, case.expected, "case {}", case.name);
         }
-    }
-
-    #[test]
-    fn call_contract_failure() {
-        let executor = PopExecutor::new();
-        if !pop_available(&executor) {
-            return;
-        }
-
-        let contract = create_standard_contract(&executor, "call_contract_failure");
-
-        let params = CallContractParams {
-            path: contract.path.to_string_lossy().to_string(),
-            contract: "0x1234".to_string(),
-            message: "get".to_string(),
-            args: None,
-            value: None,
-            execute: None,
-            suri: None,
-            url: None,
-        };
-
-        let result = call_contract(&executor, params, None).unwrap();
-        assert!(result.is_error.unwrap());
-
-        let text = content_text(&result);
-        assert!(text.contains("Contract call failed"));
     }
 }

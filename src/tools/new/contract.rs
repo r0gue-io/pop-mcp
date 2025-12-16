@@ -6,11 +6,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::PopMcpResult;
 use crate::executor::CommandExecutor;
-use crate::tools::helpers::{error_result, success_result};
+use crate::tools::common::{error_result, success_result};
 
 // Parameters
 
-pub fn list_templates(_params: ()) -> PopMcpResult<CallToolResult> {
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+pub struct ListTemplatesParams {}
+
+pub fn list_templates(_params: ListTemplatesParams) -> PopMcpResult<CallToolResult> {
     let templates = "\
 Available ink! Contract Templates:\n\n\
 1. **standard** - Basic flipper contract (boolean toggle)\n\
@@ -255,10 +258,7 @@ async fn adapt_frontend_to_contract<E: CommandExecutor>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::executor::PopExecutor;
-    use crate::tools::helpers::{content_text, pop_available};
-    use serial_test::serial;
-    use tempfile::TempDir;
+    use crate::tools::common::content_text;
 
     #[test]
     fn validate_allows_valid_names() {
@@ -299,7 +299,7 @@ mod tests {
 
     #[test]
     fn list_templates_includes_known_entries() {
-        let result = list_templates(()).unwrap();
+        let result = list_templates(ListTemplatesParams {}).unwrap();
         assert!(!result.is_error.unwrap());
         let text = content_text(&result);
         for expected in [
@@ -313,73 +313,5 @@ mod tests {
         ] {
             assert!(text.contains(expected));
         }
-    }
-
-    #[test]
-    #[serial]
-    fn create_standard_contract_succeeds() {
-        let executor = PopExecutor::new();
-        if !pop_available(&executor) {
-            return;
-        }
-
-        let temp_dir = TempDir::new().unwrap();
-        let original_dir = std::env::current_dir().unwrap();
-        std::env::set_current_dir(temp_dir.path()).unwrap();
-
-        let contract_name = "test_contract";
-        let contract_path = temp_dir.path().join(contract_name);
-
-        let params = CreateContractParams {
-            name: contract_name.to_string(),
-            template: "standard".to_string(),
-        };
-
-        let result = create_contract(&executor, params);
-        std::env::set_current_dir(&original_dir).unwrap();
-
-        assert!(result.is_ok());
-        let result = result.unwrap();
-        assert!(!result.is_error.unwrap());
-
-        let text = content_text(&result);
-        assert!(text.starts_with(&format!("Successfully created contract: {}", contract_name)));
-        assert!(contract_path.exists());
-        assert!(contract_path.join("Cargo.toml").exists());
-        assert!(contract_path.join("lib.rs").exists());
-    }
-
-    #[test]
-    fn create_contract_invalid_name_fails_before_execution() {
-        let executor = PopExecutor::new();
-        if !pop_available(&executor) {
-            return;
-        }
-        let params = CreateContractParams {
-            name: "invalid-name".to_string(),
-            template: "standard".to_string(),
-        };
-        let result = create_contract(&executor, params);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn create_contract_cli_failure() {
-        let executor = PopExecutor::new();
-        if !pop_available(&executor) {
-            return;
-        }
-
-        let params = CreateContractParams {
-            name: "test_contract".to_string(),
-            template: "non_existing".to_string(),
-        };
-        let result = create_contract(&executor, params);
-
-        assert!(result.is_ok());
-        let result = result.unwrap();
-        assert!(result.is_error.unwrap());
-        let text = content_text(&result);
-        assert!(text.starts_with("Failed to create contract:"));
     }
 }

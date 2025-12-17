@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile default
 RUN rustup toolchain install ${RUST_TOOLCHAIN} \
  && rustup default ${RUST_TOOLCHAIN} \
- && rustup component add llvm-tools llvm-tools-preview \
+ && rustup component add llvm-tools-preview \
  && rustup target add wasm32-unknown-unknown
 
 # Install coverage tooling (no nextest)

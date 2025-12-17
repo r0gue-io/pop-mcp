@@ -37,6 +37,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install yq
+        uses: mikefarah/yq@v4.44.1
+
       - name: Set environment variables
         id: out
         env:

@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Context, Result};
+use pop_mcp_server::executor::CommandExecutor;
 use pop_mcp_server::executor::PopExecutor;
 use pop_mcp_server::tools::build::contract::{build_contract, BuildContractParams};
 use pop_mcp_server::tools::clean::{clean_nodes, CleanNodesParams};

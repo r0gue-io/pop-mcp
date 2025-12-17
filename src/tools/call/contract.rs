@@ -31,10 +31,7 @@ pub struct CallContractParams {
 }
 
 /// Build command arguments for call_contract
-pub fn build_call_contract_args<'a>(
-    params: &'a CallContractParams,
-    stored_url: Option<&'a str>,
-) -> Vec<&'a str> {
+pub fn build_call_contract_args(params: &CallContractParams) -> Vec<&str> {
     let mut args = vec![
         "call",
         "contract",
@@ -65,13 +62,9 @@ pub fn build_call_contract_args<'a>(
         args.push(suri.as_str());
     }
 
-    // Use provided URL or fall back to stored URL
     if let Some(ref url) = params.url {
         args.push("--url");
         args.push(url.as_str());
-    } else if let Some(url) = stored_url {
-        args.push("--url");
-        args.push(url);
     }
 
     if params.execute.unwrap_or(false) {
@@ -101,9 +94,8 @@ fn is_error_output(output: &str) -> bool {
 pub fn call_contract<E: CommandExecutor>(
     executor: &E,
     params: CallContractParams,
-    stored_url: Option<&str>,
 ) -> PopMcpResult<CallToolResult> {
-    let args = build_call_contract_args(&params, stored_url);
+    let args = build_call_contract_args(&params);
 
     match executor.execute(&args) {
         Ok(output) => {
@@ -130,7 +122,6 @@ mod tests {
         struct Case {
             name: &'static str,
             params: CallContractParams,
-            stored_url: Option<&'static str>,
             expected: Vec<&'static str>,
         }
 
@@ -147,7 +138,6 @@ mod tests {
                     suri: None,
                     url: None,
                 },
-                stored_url: None,
                 expected: vec![
                     "call",
                     "contract",
@@ -172,7 +162,6 @@ mod tests {
                     suri: Some("//Alice".to_string()),
                     url: Some("ws://explicit:9944".to_string()),
                 },
-                stored_url: Some("ws://stored:9944"),
                 expected: vec![
                     "call",
                     "contract",
@@ -195,37 +184,10 @@ mod tests {
                     "--execute",
                 ],
             },
-            Case {
-                name: "stored_url_fallback",
-                params: CallContractParams {
-                    path: "./p".to_string(),
-                    contract: "0xabc".to_string(),
-                    message: "get".to_string(),
-                    args: None,
-                    value: None,
-                    execute: None,
-                    suri: None,
-                    url: None,
-                },
-                stored_url: Some("ws://stored:9944"),
-                expected: vec![
-                    "call",
-                    "contract",
-                    "--path",
-                    "./p",
-                    "--contract",
-                    "0xabc",
-                    "--message",
-                    "get",
-                    "-y",
-                    "--url",
-                    "ws://stored:9944",
-                ],
-            },
         ];
 
         for case in cases {
-            let args = build_call_contract_args(&case.params, case.stored_url);
+            let args = build_call_contract_args(&case.params);
             assert_eq!(args, case.expected, "case {}", case.name);
         }
     }

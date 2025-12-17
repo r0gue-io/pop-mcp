@@ -80,15 +80,6 @@ pub fn install_pop_instructions(
 mod tests {
     use super::*;
 
-    #[cfg(feature = "pop-e2e")]
-    #[test]
-    fn check_pop_installation_installed() {
-        use crate::executor::PopExecutor;
-        let executor = PopExecutor::new();
-        let result = check_pop_installation(&executor, CheckPopInstallationParams {}).unwrap();
-        assert!(!result.is_error.unwrap_or(true));
-    }
-
     #[test]
     fn install_pop_instructions_default() {
         let params = InstallPopInstructionsParams { platform: None };

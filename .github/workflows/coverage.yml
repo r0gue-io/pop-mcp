@@ -64,7 +64,7 @@ jobs:
 
       - name: Generate code coverage
         run: |
-          cargo llvm-cov test --locked --workspace --lib --bins --codecov --output-path codecov.json --no-fail-fast --nocapture --status-level all
+          cargo llvm-cov test --locked --workspace --lib --bins --codecov --output-path codecov.json --no-fail-fast --status-level all -- --nocapture
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

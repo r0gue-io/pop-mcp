@@ -19,7 +19,7 @@ fn call_contract_failure() -> Result<()> {
         url: None,
     };
 
-    let result = call_contract(&executor, params, None)?;
+    let result = call_contract(&executor, params)?;
     assert!(is_error(&result));
     assert!(text(&result)?.contains("Contract call failed"));
     Ok(())
@@ -54,7 +54,7 @@ fn call_contract_success() -> Result<()> {
         url: Some(node_url.clone()),
     };
 
-    let result = call_contract(&executor, params, None)?;
+    let result = call_contract(&executor, params)?;
     assert!(is_success(&result));
     assert!(text(&result)?.contains("false"));
 
@@ -69,7 +69,7 @@ fn call_contract_success() -> Result<()> {
         suri: Some("//Alice".to_string()),
         url: Some(node_url.clone()),
     };
-    let flip_result = call_contract(&executor, flip_params, None)?;
+    let flip_result = call_contract(&executor, flip_params)?;
     assert!(is_success(&flip_result));
 
     // Call get again - should now return true
@@ -83,7 +83,7 @@ fn call_contract_success() -> Result<()> {
         suri: Some("//Alice".to_string()),
         url: Some(node_url),
     };
-    let get_result = call_contract(&executor, get_params, None)?;
+    let get_result = call_contract(&executor, get_params)?;
     assert!(is_success(&get_result));
     assert!(text(&get_result)?.contains("true"));
     Ok(())

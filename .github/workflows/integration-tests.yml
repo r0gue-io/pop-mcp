@@ -84,7 +84,7 @@ jobs:
         run: cargo install --locked --force pop-cli
 
       - name: Bootstrap pop binaries
-        run: pop install -y
+        run: sudo "$(which pop)" install -y
 
       - name: Run integration tests
         env:

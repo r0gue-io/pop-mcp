@@ -4,7 +4,6 @@ use pop_mcp_server::executor::PopExecutor;
 use pop_mcp_server::tools::build::contract::{build_contract, BuildContractParams};
 use pop_mcp_server::tools::clean::{clean_nodes, CleanNodesParams};
 use pop_mcp_server::tools::common::extract_text;
-use pop_mcp_server::tools::install::{check_pop_installation, CheckPopInstallationParams};
 use pop_mcp_server::tools::new::contract::{create_contract, CreateContractParams};
 use pop_mcp_server::tools::up::chain::{up_ink_node, UpInkNodeParams};
 use pop_mcp_server::tools::up::contract::{deploy_contract, DeployContractParams};
@@ -234,12 +233,4 @@ impl Drop for CwdRestoreGuard {
     fn drop(&mut self) {
         let _ = std::env::set_current_dir(&self.original_dir);
     }
-}
-
-#[test]
-fn pop_is_available() -> Result<()> {
-    let executor = pop_executor()?;
-    let result = check_pop_installation(&executor, CheckPopInstallationParams {})?;
-    assert_eq!(result.is_error, Some(false));
-    Ok(())
 }

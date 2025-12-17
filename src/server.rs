@@ -131,8 +131,7 @@ impl PopMcpServer {
         &self,
         Parameters(params): Parameters<CallContractParams>,
     ) -> Result<CallToolResult, McpError> {
-        let stored_url = self.get_stored_url();
-        tools::call_contract(&self.executor, params, stored_url.as_deref())
+        tools::call_contract(&self.executor, params)
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 

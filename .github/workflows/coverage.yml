@@ -5,15 +5,7 @@ permissions:
   packages: read
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -64,7 +56,7 @@ jobs:
 
       - name: Generate code coverage
         run: |
-          cargo llvm-cov test --locked --workspace --lib --bins --codecov --output-path codecov.json --no-fail-fast --status-level all -- --nocapture
+          cargo llvm-cov test --locked --workspace --lib --bins --codecov --output-path codecov.json --no-fail-fast -- --nocapture
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -103,6 +103,25 @@ jobs:
       - name: Check default features
         run: cargo check --locked
 
+  tests:
+    needs:
+      - setup
+      - lint
+      - prepare-ci-image
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.setup.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: shared-tests-${{ github.head_ref || github.ref_name }}
+
+      - name: Run tests
+        run: cargo test --locked
+
   clippy:
     needs:
       - build

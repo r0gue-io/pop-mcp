@@ -1,4 +1,6 @@
-# Repository Guidelines
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Structure & Module Organization
 - `src/main.rs` starts the MCP server; `src/lib.rs` wires modules for library use.

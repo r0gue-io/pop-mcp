@@ -33,3 +33,6 @@ lto = true          # Enable link-time optimization
 codegen-units = 1   # Better optimization
 strip = true        # Strip symbols
 panic = "abort"     # Smaller binary
+
+[profile.production]
+inherits = "release"

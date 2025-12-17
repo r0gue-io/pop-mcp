@@ -5,7 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::error::PopMcpResult;
-use crate::executor::CommandExecutor;
+use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
 // Parameters
@@ -76,8 +76,8 @@ pub fn build_deploy_contract_args<'a>(
 }
 
 /// Execute deploy_contract tool
-pub fn deploy_contract<E: CommandExecutor>(
-    executor: &E,
+pub fn deploy_contract(
+    executor: &PopExecutor,
     params: DeployContractParams,
     stored_url: Option<&str>,
 ) -> PopMcpResult<CallToolResult> {

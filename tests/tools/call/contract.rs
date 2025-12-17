@@ -1,10 +1,10 @@
-use crate::common::{is_error, is_success, pop_executor, text, Contract};
+use crate::common::{is_error, is_success, pop_executor, text, Contract, DEFAULT_SURI};
 use anyhow::{anyhow, Result};
 use pop_mcp_server::tools::call::contract::{call_contract, CallContractParams};
 use serial_test::serial;
 
 #[test]
-fn call_contract_failure() -> Result<()> {
+fn call_contract_nonexistent_path_fails() -> Result<()> {
     let executor = pop_executor()?;
 
     // Call with a non-existent contract path - this will definitely fail
@@ -27,7 +27,7 @@ fn call_contract_failure() -> Result<()> {
 
 #[test]
 #[serial]
-fn call_contract_success() -> Result<()> {
+fn call_contract_get_and_flip_mutates_state() -> Result<()> {
     let executor = pop_executor()?;
 
     let mut contract = Contract::new(&executor, "call_test")?;
@@ -43,6 +43,7 @@ fn call_contract_success() -> Result<()> {
         .ok_or_else(|| anyhow!("Missing node URL after deploy"))?
         .to_string();
 
+    // Initial get - should return false (initial state)
     let params = CallContractParams {
         path: contract.path.to_string_lossy().to_string(),
         contract: addr.clone(),
@@ -50,7 +51,7 @@ fn call_contract_success() -> Result<()> {
         args: None,
         value: None,
         execute: None,
-        suri: Some("//Alice".to_string()),
+        suri: Some(DEFAULT_SURI.to_string()),
         url: Some(node_url.clone()),
     };
 
@@ -66,11 +67,12 @@ fn call_contract_success() -> Result<()> {
         args: None,
         value: None,
         execute: Some(true),
-        suri: Some("//Alice".to_string()),
+        suri: Some(DEFAULT_SURI.to_string()),
         url: Some(node_url.clone()),
     };
     let flip_result = call_contract(&executor, flip_params)?;
     assert!(is_success(&flip_result));
+    assert!(!text(&flip_result)?.is_empty());
 
     // Call get again - should now return true
     let get_params = CallContractParams {
@@ -80,7 +82,7 @@ fn call_contract_success() -> Result<()> {
         args: None,
         value: None,
         execute: None,
-        suri: Some("//Alice".to_string()),
+        suri: Some(DEFAULT_SURI.to_string()),
         url: Some(node_url),
     };
     let get_result = call_contract(&executor, get_params)?;

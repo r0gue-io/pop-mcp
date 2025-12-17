@@ -5,7 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::error::PopMcpResult;
-use crate::executor::CommandExecutor;
+use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
 // Parameters
@@ -40,8 +40,8 @@ pub fn build_test_contract_args(params: &TestContractParams) -> Vec<&str> {
 }
 
 /// Execute test_contract tool
-pub fn test_contract<E: CommandExecutor>(
-    executor: &E,
+pub fn test_contract(
+    executor: &PopExecutor,
     params: TestContractParams,
 ) -> PopMcpResult<CallToolResult> {
     params

@@ -5,7 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::error::PopMcpResult;
-use crate::executor::CommandExecutor;
+use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
@@ -31,8 +31,8 @@ fn parse_ws_url(output: &str) -> Option<String> {
 /// Execute up_ink_node tool (pop up ink-node)
 ///
 /// Returns the websocket URL on success (e.g., "ws://localhost:9944")
-pub fn up_ink_node<E: CommandExecutor>(
-    executor: &E,
+pub fn up_ink_node(
+    executor: &PopExecutor,
     _params: UpInkNodeParams,
 ) -> PopMcpResult<CallToolResult> {
     let args = ["up", "ink-node", "-y", "--detach"];

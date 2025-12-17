@@ -5,10 +5,11 @@ use serial_test::serial;
 
 #[test]
 #[serial]
-fn contract_success_and_e2e() -> Result<()> {
+fn test_contract_unit_and_e2e_both_pass() -> Result<()> {
     let executor = pop_executor()?;
     let contract = Contract::new(&executor, "test_contract_e2e")?;
 
+    // Run unit tests
     let params = TestContractParams {
         path: contract.path.to_string_lossy().to_string(),
         e2e: false,
@@ -17,6 +18,7 @@ fn contract_success_and_e2e() -> Result<()> {
     assert!(is_success(&result));
     assert!(text(&result)?.contains("Tests completed!"));
 
+    // Run e2e tests
     let params_e2e = TestContractParams {
         path: contract.path.to_string_lossy().to_string(),
         e2e: true,
@@ -28,7 +30,7 @@ fn contract_success_and_e2e() -> Result<()> {
 }
 
 #[test]
-fn contract_nonexistent_path() -> Result<()> {
+fn test_contract_nonexistent_path_fails() -> Result<()> {
     let executor = pop_executor()?;
     let params = TestContractParams {
         path: "/nonexistent/path/to/contract".to_string(),

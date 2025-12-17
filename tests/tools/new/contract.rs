@@ -6,7 +6,7 @@ use tempfile::TempDir;
 
 #[test]
 #[serial]
-fn create_standard_contract_succeeds() -> Result<()> {
+fn create_contract_standard_template_creates_files() -> Result<()> {
     let executor = pop_executor()?;
     let temp_dir = TempDir::new()?;
     let original_dir = std::env::current_dir()?;
@@ -26,8 +26,8 @@ fn create_standard_contract_succeeds() -> Result<()> {
     let result = result?;
     assert!(is_success(&result));
 
-    let text = text(&result)?;
-    assert!(text.starts_with(&format!("Successfully created contract: {}", contract_name)));
+    let output = text(&result)?;
+    assert!(output.starts_with(&format!("Successfully created contract: {}", contract_name)));
     assert!(contract_path.exists());
     assert!(contract_path.join("Cargo.toml").exists());
     assert!(contract_path.join("lib.rs").exists());
@@ -35,7 +35,7 @@ fn create_standard_contract_succeeds() -> Result<()> {
 }
 
 #[test]
-fn create_contract_invalid_name_fails_before_execution() -> Result<()> {
+fn create_contract_invalid_name_with_hyphen_fails_validation() -> Result<()> {
     let executor = pop_executor()?;
     let params = CreateContractParams {
         name: "invalid-name".to_string(),
@@ -47,16 +47,14 @@ fn create_contract_invalid_name_fails_before_execution() -> Result<()> {
 }
 
 #[test]
-fn create_contract_cli_failure() -> Result<()> {
+fn create_contract_nonexistent_template_fails() -> Result<()> {
     let executor = pop_executor()?;
     let params = CreateContractParams {
         name: "test_contract".to_string(),
         template: "non_existing".to_string(),
     };
     let result = create_contract(&executor, params)?;
-
     assert!(is_error(&result));
-    let text = text(&result)?;
-    assert!(text.starts_with("Failed to create contract:"));
+    assert!(text(&result)?.starts_with("Failed to create contract:"));
     Ok(())
 }

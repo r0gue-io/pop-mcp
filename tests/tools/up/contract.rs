@@ -1,10 +1,10 @@
-use crate::common::{is_error, is_success, pop_executor, text, Contract, InkNode};
+use crate::common::{is_error, is_success, pop_executor, text, Contract, InkNode, DEFAULT_SURI};
 use anyhow::Result;
 use pop_mcp_server::tools::up::contract::{deploy_contract, DeployContractParams};
 use serial_test::serial;
 
 #[test]
-fn deploy_nonexistent_path() -> Result<()> {
+fn deploy_contract_nonexistent_path_fails() -> Result<()> {
     let executor = pop_executor()?;
     let params = DeployContractParams {
         path: "/nonexistent/path/to/contract".to_string(),
@@ -24,7 +24,7 @@ fn deploy_nonexistent_path() -> Result<()> {
 
 #[test]
 #[serial]
-fn deploy_contract_success() -> Result<()> {
+fn deploy_contract_succeeds_and_returns_address() -> Result<()> {
     let executor = pop_executor()?;
     let contract = Contract::new(&executor, "deploy_test")?;
     contract.build(&executor)?;
@@ -38,17 +38,14 @@ fn deploy_contract_success() -> Result<()> {
             args: Some("false".to_string()),
             value: None,
             execute: Some(true),
-            suri: Some("//Alice".to_string()),
+            suri: Some(DEFAULT_SURI.to_string()),
             url: Some(node.url.clone()),
         },
         None,
     )?;
 
     assert!(is_success(&result));
-    let msg = text(&result)?;
-    assert!(
-        msg.contains("0x") || msg.contains("5"),
-        "Expected contract address in output, got: {msg}"
-    );
+    let output = text(&result)?;
+    assert!(output.contains("0x") || output.contains("5"));
     Ok(())
 }

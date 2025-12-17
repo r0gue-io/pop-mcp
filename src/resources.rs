@@ -7,21 +7,13 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-pub enum DocScope {
-    Ink,
-    Pop,
-    Xcm,
-    Dedot,
-    All,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct SearchDocumentationParams {
     #[schemars(description = "Search query or topic")]
     pub query: String,
-    #[schemars(description = "Limit search to specific documentation (ink, pop, xcm, dedot, all)")]
-    pub scope: Option<DocScope>,
+    #[schemars(
+        description = "Limit search to specific documentation: 'ink', 'pop', 'xcm', 'dedot', or 'all'"
+    )]
+    pub scope: Option<String>,
 }
 
 pub async fn search_documentation(
@@ -134,13 +126,19 @@ async fn fetch_external_doc(url: &str) -> Result<String> {
     Ok(text)
 }
 
-pub async fn search_docs(query: &str, scope: Option<DocScope>) -> Result<CallToolResult> {
-    let search_scope = match scope {
-        Some(DocScope::Ink) => "ink",
-        Some(DocScope::Pop) => "pop",
-        Some(DocScope::Xcm) => "xcm",
-        Some(DocScope::Dedot) => "dedot",
-        Some(DocScope::All) | None => "all",
+pub async fn search_docs(query: &str, scope: Option<String>) -> Result<CallToolResult> {
+    let search_scope = match scope.as_deref() {
+        Some("ink") => "ink",
+        Some("pop") => "pop",
+        Some("xcm") => "xcm",
+        Some("dedot") => "dedot",
+        Some("all") | None => "all",
+        Some(other) => {
+            return Ok(CallToolResult::success(vec![Content::text(format!(
+                "Invalid scope '{}'. Valid options: ink, pop, xcm, dedot, all",
+                other
+            ))]));
+        }
     };
 
     let mut results = String::new();

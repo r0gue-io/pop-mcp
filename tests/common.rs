@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Context, Result};
-use pop_mcp_server::executor::CommandExecutor;
 use pop_mcp_server::executor::PopExecutor;
 use pop_mcp_server::tools::build::contract::{build_contract, BuildContractParams};
 use pop_mcp_server::tools::clean::{clean_nodes, CleanNodesParams};
@@ -11,6 +10,13 @@ use rmcp::model::CallToolResult;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
+
+/// Default port for ink-node
+pub const DEFAULT_NODE_PORT: u16 = 9944;
+/// Default WebSocket URL for ink-node
+pub const DEFAULT_NODE_URL: &str = "ws://localhost:9944";
+/// Default signer URI for test transactions
+pub const DEFAULT_SURI: &str = "//Alice";
 
 pub fn is_error(result: &CallToolResult) -> bool {
     result.is_error == Some(true)
@@ -55,8 +61,11 @@ impl<'a> InkNode<'a> {
             .ok_or_else(|| anyhow!("Failed to extract URL from ink-node output"))?;
 
         // Verify the node is actually running
-        if !is_port_in_use(9944) {
-            return Err(anyhow!("Port 9944 not in use after launching ink-node"));
+        if !is_port_in_use(DEFAULT_NODE_PORT) {
+            return Err(anyhow!(
+                "Port {} not in use after launching ink-node",
+                DEFAULT_NODE_PORT
+            ));
         }
 
         Ok(Self { executor, url })
@@ -70,7 +79,9 @@ impl<'a> InkNode<'a> {
 
 impl Drop for InkNode<'_> {
     fn drop(&mut self) {
-        let _ = clean_nodes(self.executor, CleanNodesParams {});
+        if let Err(e) = clean_nodes(self.executor, CleanNodesParams {}) {
+            eprintln!("[test cleanup] Failed to clean ink-node: {e}");
+        }
     }
 }
 
@@ -160,7 +171,7 @@ impl<'a> Contract<'a> {
             args: args.map(String::from),
             value: None,
             execute: Some(true),
-            suri: Some("//Alice".to_string()),
+            suri: Some(DEFAULT_SURI.to_string()),
             url: Some(url),
         };
         let deploy_result =
@@ -231,6 +242,115 @@ impl CwdRestoreGuard {
 
 impl Drop for CwdRestoreGuard {
     fn drop(&mut self) {
-        let _ = std::env::set_current_dir(&self.original_dir);
+        if let Err(e) = std::env::set_current_dir(&self.original_dir) {
+            eprintln!(
+                "[test cleanup] Failed to restore cwd to {}: {e}",
+                self.original_dir.display()
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod parse_contract_address_tests {
+        use super::*;
+
+        #[test]
+        fn parses_ethereum_address_in_quotes() {
+            let output = r#"The contract address is "0x742d35Cc6634C0532925a3b844Bc454e4438f44e""#;
+            let addr = parse_contract_address(output);
+            assert_eq!(
+                addr,
+                Some("0x742d35Cc6634C0532925a3b844Bc454e4438f44e".to_string())
+            );
+        }
+
+        #[test]
+        fn parses_ethereum_address_with_surrounding_text() {
+            let output = r#"
+┌   Deployment complete!
+│   The contract address is "0xd43593c715fdd31c61141abd04a99fd6822c8558"
+│   Gas used: 123456
+"#;
+            let addr = parse_contract_address(output);
+            assert_eq!(
+                addr,
+                Some("0xd43593c715fdd31c61141abd04a99fd6822c8558".to_string())
+            );
+        }
+
+        #[test]
+        fn parses_ss58_address() {
+            // Real SS58 address (48 chars starting with 5)
+            let output = "Contract deployed at 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
+            let addr = parse_contract_address(output);
+            assert_eq!(
+                addr,
+                Some("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY".to_string())
+            );
+        }
+
+        #[test]
+        fn parses_ss58_address_47_chars() {
+            // 47-char SS58 address
+            let output = "Contract: 5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL";
+            let addr = parse_contract_address(output);
+            assert_eq!(
+                addr,
+                Some("5CiPPseXPECbkjWCa6MnjNokrgYjMqmKndv2rSnekmSK2DjL".to_string())
+            );
+        }
+
+        #[test]
+        fn prefers_ethereum_address_over_ss58() {
+            // When both formats could be present, Ethereum format takes precedence
+            let output = r#"Address "0x742d35Cc6634C0532925a3b844Bc454e4438f44e" or 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"#;
+            let addr = parse_contract_address(output);
+            assert_eq!(
+                addr,
+                Some("0x742d35Cc6634C0532925a3b844Bc454e4438f44e".to_string())
+            );
+        }
+
+        #[test]
+        fn returns_none_for_invalid_ethereum_address_wrong_length() {
+            // Too short (only 20 chars after 0x)
+            let output = r#"Address "0x742d35Cc6634C0532925""#;
+            let addr = parse_contract_address(output);
+            assert!(addr.is_none());
+        }
+
+        #[test]
+        fn returns_none_for_invalid_ss58_too_short() {
+            // SS58 address too short (only 40 chars)
+            let output = "Contract: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCP";
+            let addr = parse_contract_address(output);
+            assert!(addr.is_none());
+        }
+
+        #[test]
+        fn returns_none_for_no_address() {
+            let output = "Deployment failed: insufficient funds";
+            let addr = parse_contract_address(output);
+            assert!(addr.is_none());
+        }
+
+        #[test]
+        fn returns_none_for_empty_string() {
+            let addr = parse_contract_address("");
+            assert!(addr.is_none());
+        }
+
+        #[test]
+        fn ignores_ss58_with_special_chars() {
+            // Address with punctuation should be ignored
+            let output = "Contract: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.";
+            let addr = parse_contract_address(output);
+            // The dot makes it fail the alphanumeric check
+            assert!(addr.is_none());
+        }
     }
 }

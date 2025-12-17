@@ -5,7 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::error::PopMcpResult;
-use crate::executor::CommandExecutor;
+use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
 // Parameters
@@ -91,8 +91,8 @@ fn is_error_output(output: &str) -> bool {
 }
 
 /// Execute call_contract tool
-pub fn call_contract<E: CommandExecutor>(
-    executor: &E,
+pub fn call_contract(
+    executor: &PopExecutor,
     params: CallContractParams,
 ) -> PopMcpResult<CallToolResult> {
     let args = build_call_contract_args(&params);

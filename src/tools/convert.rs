@@ -5,7 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::error::PopMcpResult;
-use crate::executor::CommandExecutor;
+use crate::executor::PopExecutor;
 
 use super::common::{error_result, success_result};
 
@@ -35,8 +35,8 @@ pub fn build_convert_address_args(params: &ConvertAddressParams) -> [&str; 3] {
 }
 
 /// Execute convert_address tool
-pub fn convert_address<E: CommandExecutor>(
-    executor: &E,
+pub fn convert_address(
+    executor: &PopExecutor,
     params: ConvertAddressParams,
 ) -> PopMcpResult<CallToolResult> {
     // Validate parameters

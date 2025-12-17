@@ -1,4 +1,4 @@
-use crate::common::{is_port_in_use, is_success, pop_executor};
+use crate::common::{is_port_in_use, is_success, pop_executor, DEFAULT_NODE_PORT};
 use anyhow::Result;
 use pop_mcp_server::tools::clean::{clean_nodes, CleanNodesParams};
 use pop_mcp_server::tools::up::chain::{up_ink_node, UpInkNodeParams};
@@ -12,18 +12,11 @@ fn clean_nodes_stops_running_node() -> Result<()> {
     // Use raw up_ink_node since we're specifically testing clean_nodes
     let result = up_ink_node(&executor, UpInkNodeParams {})?;
     assert!(is_success(&result));
-    assert!(
-        is_port_in_use(9944),
-        "Port 9944 should be in use after launch"
-    );
+    assert!(is_port_in_use(DEFAULT_NODE_PORT));
 
     // Test clean_nodes functionality
     let result = clean_nodes(&executor, CleanNodesParams {})?;
     assert!(is_success(&result));
-
-    assert!(
-        !is_port_in_use(9944),
-        "Port 9944 should be free after clean"
-    );
+    assert!(!is_port_in_use(DEFAULT_NODE_PORT));
     Ok(())
 }

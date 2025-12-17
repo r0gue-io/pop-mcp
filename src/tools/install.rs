@@ -5,7 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::error::PopMcpResult;
-use crate::executor::CommandExecutor;
+use crate::executor::PopExecutor;
 
 use super::common::{error_result, success_result};
 
@@ -18,8 +18,8 @@ pub struct InstallPopInstructionsParams {
     pub platform: Option<String>,
 }
 
-pub fn check_pop_installation<E: CommandExecutor>(
-    executor: &E,
+pub fn check_pop_installation(
+    executor: &PopExecutor,
     _params: CheckPopInstallationParams,
 ) -> PopMcpResult<CallToolResult> {
     match executor.execute(&["--version"]) {

@@ -62,12 +62,12 @@ jobs:
           cache-on-failure: true
 
       - name: Build binary
-        run: cargo build --locked --release --target ${{ matrix.platform.target }}
+        run: cargo build --locked --profile=production --target ${{ matrix.platform.target }}
 
       - name: Package binary (Linux)
         if: contains(matrix.platform.target, 'linux')
         run: |
-          cd target/${{ matrix.platform.target }}/release
+          cd target/${{ matrix.platform.target }}/production
           mv pop-mcp-server "${ARTIFACT_NAME}"
           tar -czf "${ARTIFACT_NAME}.tar.gz" "${ARTIFACT_NAME}"
           sha256sum "${ARTIFACT_NAME}.tar.gz" > "${ARTIFACT_NAME}.tar.gz.sha256"
@@ -75,7 +75,7 @@ jobs:
       - name: Package binary (macOS)
         if: contains(matrix.platform.target, 'apple')
         run: |
-          cd target/${{ matrix.platform.target }}/release
+          cd target/${{ matrix.platform.target }}/production
           mv pop-mcp-server "${ARTIFACT_NAME}"
           tar -czf "${ARTIFACT_NAME}.tar.gz" "${ARTIFACT_NAME}"
           shasum -a 256 "${ARTIFACT_NAME}.tar.gz" > "${ARTIFACT_NAME}.tar.gz.sha256"
@@ -85,13 +85,13 @@ jobs:
         with:
           name: binary-${{ matrix.platform.target }}
           path: |
-            target/${{ matrix.platform.target }}/release/${{ env.ARTIFACT_NAME }}.tar.gz
-            target/${{ matrix.platform.target }}/release/${{ env.ARTIFACT_NAME }}.tar.gz.sha256
+            target/${{ matrix.platform.target }}/production/${{ env.ARTIFACT_NAME }}.tar.gz
+            target/${{ matrix.platform.target }}/production/${{ env.ARTIFACT_NAME }}.tar.gz.sha256
 
       - name: Upload to GitHub Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            target/${{ matrix.platform.target }}/release/${{ env.ARTIFACT_NAME }}.tar.gz
-            target/${{ matrix.platform.target }}/release/${{ env.ARTIFACT_NAME }}.tar.gz.sha256
+            target/${{ matrix.platform.target }}/production/${{ env.ARTIFACT_NAME }}.tar.gz
+            target/${{ matrix.platform.target }}/production/${{ env.ARTIFACT_NAME }}.tar.gz.sha256

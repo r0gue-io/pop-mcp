@@ -5,7 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::error::PopMcpResult;
-use crate::executor::CommandExecutor;
+use crate::executor::PopExecutor;
 
 pub mod build;
 pub mod call;
@@ -39,10 +39,7 @@ pub struct PopHelpParams {
     pub command: Option<String>,
 }
 
-pub fn pop_help<E: CommandExecutor>(
-    executor: &E,
-    params: PopHelpParams,
-) -> PopMcpResult<CallToolResult> {
+pub fn pop_help(executor: &PopExecutor, params: PopHelpParams) -> PopMcpResult<CallToolResult> {
     let args = if let Some(ref command) = params.command {
         let mut cmd_parts: Vec<&str> = command.split_whitespace().collect();
         cmd_parts.push("--help");

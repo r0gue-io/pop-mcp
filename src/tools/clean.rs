@@ -5,15 +5,15 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::error::PopMcpResult;
-use crate::executor::CommandExecutor;
+use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct CleanNodesParams {}
 
 /// Stop all running local nodes using pop clean node --all
-pub fn clean_nodes<E: CommandExecutor>(
-    executor: &E,
+pub fn clean_nodes(
+    executor: &PopExecutor,
     _params: CleanNodesParams,
 ) -> PopMcpResult<CallToolResult> {
     let args = ["clean", "node", "--all"];

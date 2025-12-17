@@ -5,7 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::error::PopMcpResult;
-use crate::executor::CommandExecutor;
+use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
 // Parameters
@@ -67,8 +67,8 @@ pub fn build_create_contract_args(params: &CreateContractParams) -> [&str; 5] {
 }
 
 /// Execute create_contract tool
-pub fn create_contract<E: CommandExecutor>(
-    executor: &E,
+pub fn create_contract(
+    executor: &PopExecutor,
     params: CreateContractParams,
 ) -> PopMcpResult<CallToolResult> {
     // Validate parameters

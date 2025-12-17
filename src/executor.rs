@@ -4,12 +4,6 @@ use std::process::Command;
 
 use crate::error::{PopMcpError, PopMcpResult};
 
-/// Trait for executing Pop CLI commands
-pub trait CommandExecutor: Send + Sync {
-    /// Execute a Pop CLI command with the given arguments
-    fn execute(&self, args: &[&str]) -> PopMcpResult<String>;
-}
-
 /// Output from command execution
 #[derive(Debug, Clone)]
 pub struct CommandOutput {
@@ -65,10 +59,9 @@ impl PopExecutor {
             success: output.status.success(),
         })
     }
-}
 
-impl CommandExecutor for PopExecutor {
-    fn execute(&self, args: &[&str]) -> PopMcpResult<String> {
+    /// Execute a Pop CLI command with the given arguments
+    pub fn execute(&self, args: &[&str]) -> PopMcpResult<String> {
         let output = self.execute_raw(args)?;
 
         if output.success {

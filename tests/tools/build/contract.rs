@@ -4,7 +4,7 @@ use pop_mcp_server::tools::build::contract::{build_contract, BuildContractParams
 use serial_test::serial;
 
 #[test]
-fn build_nonexistent_path_fails() -> Result<()> {
+fn build_contract_nonexistent_path_fails() -> Result<()> {
     let executor = pop_executor()?;
     let params = BuildContractParams {
         path: "/nonexistent/path/to/contract".to_string(),
@@ -19,7 +19,7 @@ fn build_nonexistent_path_fails() -> Result<()> {
 
 #[test]
 #[serial]
-fn build_contract_success_creates_artifacts() -> Result<()> {
+fn build_contract_creates_ink_artifacts() -> Result<()> {
     let executor = pop_executor()?;
     let contract = Contract::new(&executor, "build_test")?;
 
@@ -29,8 +29,10 @@ fn build_contract_success_creates_artifacts() -> Result<()> {
     };
 
     let result = build_contract(&executor, build_params)?;
-    assert!(is_success(&result), "tool reported error");
-    assert!(text(&result)?.contains("Build successful"));
+    assert!(is_success(&result));
+
+    let output = text(&result)?;
+    assert!(output.contains("Build successful"));
 
     // Verify build artifacts exist
     assert!(contract.path.join("target/ink").exists());

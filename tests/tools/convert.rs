@@ -31,7 +31,7 @@ fn convert_substrate_to_ethereum() -> Result<()> {
 }
 
 #[test]
-fn convert_invalid_address() -> Result<()> {
+fn convert_invalid_address_fails() -> Result<()> {
     let executor = pop_executor()?;
     let params = ConvertAddressParams {
         address: "not_a_valid_address".to_string(),

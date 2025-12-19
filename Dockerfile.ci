@@ -8,9 +8,11 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Minimal system deps: ca-certificates, curl, git, protoc, build essentials for crates that need it
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates git clang curl libssl-dev build-essential protobuf-compiler gnupg \
+    ca-certificates git clang curl libssl-dev build-essential protobuf-compiler gnupg pkg-config \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
+
+RUN pkg-config --version
 
 # Install Rust
 RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile default

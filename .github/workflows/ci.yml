@@ -149,7 +149,7 @@ jobs:
           args: --all-targets -- -D warnings
 
   docker:
-    if: hashFiles('Dockerfile') != ''
+    if: ${{ hashFiles('Dockerfile') != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

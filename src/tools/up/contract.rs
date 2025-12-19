@@ -1,4 +1,4 @@
-//! Contract deployment (pop up <contract>)
+//! Contract deployment (`pop up <contract>`)
 
 use rmcp::model::CallToolResult;
 use schemars::JsonSchema;

@@ -1,13 +1,12 @@
-use crate::common::{is_error, is_success, pop_executor, text, Contract};
+use crate::common::{is_error, is_success, text, Contract, TestContext};
 use anyhow::Result;
 use pop_mcp_server::tools::test::contract::{test_contract, TestContractParams};
-use serial_test::serial;
 
 #[test]
-#[serial]
 fn test_contract_unit_and_e2e_both_pass() -> Result<()> {
-    let executor = pop_executor()?;
-    let contract = Contract::new(&executor, "test_contract_e2e")?;
+    let ctx = TestContext::new()?;
+    let executor = ctx.executor()?;
+    let contract = Contract::with_context(ctx, &executor, "test_contract_e2e")?;
 
     // Run unit tests
     let params = TestContractParams {
@@ -31,7 +30,8 @@ fn test_contract_unit_and_e2e_both_pass() -> Result<()> {
 
 #[test]
 fn test_contract_nonexistent_path_fails() -> Result<()> {
-    let executor = pop_executor()?;
+    let ctx = TestContext::new()?;
+    let executor = ctx.executor()?;
     let params = TestContractParams {
         path: "/nonexistent/path/to/contract".to_string(),
         e2e: false,

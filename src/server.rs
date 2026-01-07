@@ -140,9 +140,9 @@ impl PopMcpServer {
     )]
     async fn up_ink_node(
         &self,
-        Parameters(_): Parameters<UpInkNodeParams>,
+        Parameters(params): Parameters<UpInkNodeParams>,
     ) -> Result<CallToolResult, McpError> {
-        let result = tools::up_ink_node(&self.executor, UpInkNodeParams {})
+        let result = tools::up_ink_node(&self.executor, params)
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 
         // Store the WebSocket URL for later use (result contains the URL on success)
@@ -157,12 +157,12 @@ impl PopMcpServer {
         Ok(result)
     }
 
-    #[tool(description = "Stop all running local ink! nodes")]
+    #[tool(description = "Stop running local ink! nodes by PID")]
     async fn clean_nodes(
         &self,
-        Parameters(_): Parameters<CleanNodesParams>,
+        Parameters(params): Parameters<CleanNodesParams>,
     ) -> Result<CallToolResult, McpError> {
-        tools::clean_nodes(&self.executor, CleanNodesParams {})
+        tools::clean_nodes(&self.executor, params)
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 

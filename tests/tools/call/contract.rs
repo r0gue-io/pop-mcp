@@ -1,11 +1,11 @@
-use crate::common::{is_error, is_success, pop_executor, text, Contract, DEFAULT_SURI};
+use crate::common::{is_error, is_success, text, Contract, TestContext, DEFAULT_SURI};
 use anyhow::{anyhow, Result};
 use pop_mcp_server::tools::call::contract::{call_contract, CallContractParams};
-use serial_test::serial;
 
 #[test]
 fn call_contract_nonexistent_path_fails() -> Result<()> {
-    let executor = pop_executor()?;
+    let ctx = TestContext::new()?;
+    let executor = ctx.executor()?;
 
     // Call with a non-existent contract path - this will definitely fail
     let params = CallContractParams {
@@ -26,11 +26,11 @@ fn call_contract_nonexistent_path_fails() -> Result<()> {
 }
 
 #[test]
-#[serial]
 fn call_contract_get_and_flip_mutates_state() -> Result<()> {
-    let executor = pop_executor()?;
+    let ctx = TestContext::new()?;
+    let executor = ctx.executor()?;
 
-    let mut contract = Contract::new(&executor, "call_test")?;
+    let mut contract = Contract::with_context(ctx, &executor, "call_test")?;
     contract.build(&executor)?;
     contract.deploy(&executor, Some("new"), Some("false"))?;
     let addr = contract

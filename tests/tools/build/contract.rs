@@ -1,11 +1,11 @@
-use crate::common::{is_error, is_success, pop_executor, text, Contract};
+use crate::common::{is_error, is_success, text, Contract, TestContext};
 use anyhow::Result;
 use pop_mcp_server::tools::build::contract::{build_contract, BuildContractParams};
-use serial_test::serial;
 
 #[test]
 fn build_contract_nonexistent_path_fails() -> Result<()> {
-    let executor = pop_executor()?;
+    let ctx = TestContext::new()?;
+    let executor = ctx.executor()?;
     let params = BuildContractParams {
         path: "/nonexistent/path/to/contract".to_string(),
         release: None,
@@ -18,10 +18,10 @@ fn build_contract_nonexistent_path_fails() -> Result<()> {
 }
 
 #[test]
-#[serial]
 fn build_contract_creates_ink_artifacts() -> Result<()> {
-    let executor = pop_executor()?;
-    let contract = Contract::new(&executor, "build_test")?;
+    let ctx = TestContext::new()?;
+    let executor = ctx.executor()?;
+    let contract = Contract::with_context(ctx, &executor, "build_test")?;
 
     let build_params = BuildContractParams {
         path: contract.path.to_string_lossy().to_string(),

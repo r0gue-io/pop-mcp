@@ -1,10 +1,11 @@
-use crate::common::{is_error, is_success, pop_executor, text};
+use crate::common::{is_error, is_success, text, TestContext};
 use anyhow::Result;
 use pop_mcp_server::tools::convert::{convert_address, ConvertAddressParams};
 
 #[test]
 fn convert_ethereum_to_substrate() -> Result<()> {
-    let executor = pop_executor()?;
+    let ctx = TestContext::new()?;
+    let executor = ctx.executor()?;
     let params = ConvertAddressParams {
         address: "0x742d35Cc6634C0532925a3b844Bc454e4438f44e".to_string(),
     };
@@ -17,7 +18,8 @@ fn convert_ethereum_to_substrate() -> Result<()> {
 
 #[test]
 fn convert_substrate_to_ethereum() -> Result<()> {
-    let executor = pop_executor()?;
+    let ctx = TestContext::new()?;
+    let executor = ctx.executor()?;
     let params = ConvertAddressParams {
         address: "13dKz82CEiU7fKfhfQ5aLpdbXHApLfJH5Z6y2RTZpRwKiNhX".to_string(),
     };
@@ -32,7 +34,8 @@ fn convert_substrate_to_ethereum() -> Result<()> {
 
 #[test]
 fn convert_invalid_address_fails() -> Result<()> {
-    let executor = pop_executor()?;
+    let ctx = TestContext::new()?;
+    let executor = ctx.executor()?;
     let params = ConvertAddressParams {
         address: "not_a_valid_address".to_string(),
     };

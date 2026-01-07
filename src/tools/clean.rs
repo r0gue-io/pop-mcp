@@ -9,17 +9,34 @@ use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
-pub struct CleanNodesParams {}
+pub struct CleanNodesParams {
+    pub pids: Vec<u32>,
+}
 
-/// Stop all running local nodes using pop clean node --all
+/// Stop running local nodes using pop clean node --pid <pid...>
 pub fn clean_nodes(
     executor: &PopExecutor,
-    _params: CleanNodesParams,
+    params: CleanNodesParams,
 ) -> PopMcpResult<CallToolResult> {
-    let args = ["clean", "node", "--all"];
+    if params.pids.is_empty() {
+        return Ok(error_result("At least one pid is required"));
+    }
 
-    match executor.execute(&args) {
-        Ok(output) => Ok(success_result(format!("Nodes cleaned!\n\n{}", output))),
+    let mut args = vec!["clean".to_string(), "node".to_string(), "--pid".to_string()];
+    args.extend(params.pids.iter().map(|pid| pid.to_string()));
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+
+    match executor.execute(&arg_refs) {
+        Ok(output) => Ok(success_result(format!(
+            "Nodes cleaned for pids: {}\n\n{}",
+            params
+                .pids
+                .iter()
+                .map(|pid| pid.to_string())
+                .collect::<Vec<_>>()
+                .join(" "),
+            output
+        ))),
         Err(e) => Ok(error_result(format!("Failed to clean nodes: {}", e))),
     }
 }

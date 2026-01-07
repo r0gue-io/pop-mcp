@@ -1,29 +1,21 @@
-use crate::common::{is_error, is_success, pop_executor, text};
+use crate::common::{is_error, is_success, text, TestContext};
 use anyhow::Result;
 use pop_mcp_server::tools::new::contract::{create_contract, CreateContractParams};
-use serial_test::serial;
-use tempfile::TempDir;
 
 #[test]
-#[serial]
 fn create_contract_standard_template_creates_files() -> Result<()> {
-    let executor = pop_executor()?;
-    let temp_dir = TempDir::new()?;
-    let original_dir = std::env::current_dir()?;
-    std::env::set_current_dir(temp_dir.path())?;
+    let ctx = TestContext::new()?;
+    let executor = ctx.executor()?;
 
     let contract_name = "test_contract";
-    let contract_path = temp_dir.path().join(contract_name);
+    let contract_path = ctx.workdir.join(contract_name);
 
     let params = CreateContractParams {
         name: contract_name.to_string(),
         template: "standard".to_string(),
     };
 
-    let result = create_contract(&executor, params);
-    std::env::set_current_dir(&original_dir)?;
-
-    let result = result?;
+    let result = create_contract(&executor, params)?;
     assert!(is_success(&result));
 
     let output = text(&result)?;
@@ -36,7 +28,8 @@ fn create_contract_standard_template_creates_files() -> Result<()> {
 
 #[test]
 fn create_contract_invalid_name_with_hyphen_fails_validation() -> Result<()> {
-    let executor = pop_executor()?;
+    let ctx = TestContext::new()?;
+    let executor = ctx.executor()?;
     let params = CreateContractParams {
         name: "invalid-name".to_string(),
         template: "standard".to_string(),
@@ -48,7 +41,8 @@ fn create_contract_invalid_name_with_hyphen_fails_validation() -> Result<()> {
 
 #[test]
 fn create_contract_nonexistent_template_fails() -> Result<()> {
-    let executor = pop_executor()?;
+    let ctx = TestContext::new()?;
+    let executor = ctx.executor()?;
     let params = CreateContractParams {
         name: "test_contract".to_string(),
         template: "non_existing".to_string(),

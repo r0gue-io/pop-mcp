@@ -1,20 +1,19 @@
+#![cfg(feature = "pop-e2e")]
+
 use anyhow::{anyhow, Context, Result};
 use pop_mcp_server::executor::PopExecutor;
 use pop_mcp_server::tools::build::contract::{build_contract, BuildContractParams};
-use pop_mcp_server::tools::clean::{clean_nodes, CleanNodesParams};
 use pop_mcp_server::tools::common::extract_text;
 use pop_mcp_server::tools::new::contract::{create_contract, CreateContractParams};
 use pop_mcp_server::tools::up::chain::{up_ink_node, UpInkNodeParams};
 use pop_mcp_server::tools::up::contract::{deploy_contract, DeployContractParams};
-use rmcp::model::CallToolResult;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use rmcp::model::{CallToolResult, RawContent};
+use std::net::{TcpStream, ToSocketAddrs};
+use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
-/// Default port for ink-node
-pub const DEFAULT_NODE_PORT: u16 = 9944;
-/// Default WebSocket URL for ink-node
-pub const DEFAULT_NODE_URL: &str = "ws://localhost:9944";
 /// Default signer URI for test transactions
 pub const DEFAULT_SURI: &str = "//Alice";
 
@@ -30,92 +29,213 @@ pub fn text(result: &CallToolResult) -> Result<String> {
     extract_text(result).ok_or_else(|| anyhow!("CallToolResult missing text content"))
 }
 
-/// Create a PopExecutor for testing.
-/// Returns error if Pop CLI is not available.
-pub fn pop_executor() -> Result<PopExecutor> {
-    let executor = PopExecutor::new();
-    executor
-        .execute(&["--version"])
-        .map_err(|e| anyhow!("Pop CLI is not available: {e}"))?;
-    Ok(executor)
+pub fn texts(result: &CallToolResult) -> Vec<String> {
+    result
+        .content
+        .iter()
+        .filter_map(|c| match &c.raw {
+            RawContent::Text(t) => Some(t.text.clone()),
+            _ => None,
+        })
+        .collect()
 }
 
-/// A guard that manages an ink-node's lifecycle.
-/// Automatically cleans up the node when dropped.
-pub struct InkNode<'a> {
-    executor: &'a PopExecutor,
-    pub url: String,
+fn wait_for_port(host: &str, port: u16, timeout: Duration) -> Result<()> {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        if is_port_open(host, port) {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    Err(anyhow!("Timed out waiting for port {host}:{port}"))
 }
 
-impl<'a> InkNode<'a> {
-    /// Launch an ink-node and return a guard that cleans it up on drop.
-    pub fn launch(executor: &'a PopExecutor) -> Result<Self> {
-        let result =
-            up_ink_node(executor, UpInkNodeParams {}).context("Failed to launch ink-node")?;
-
-        if is_error(&result) {
-            return Err(anyhow!("Failed to launch ink-node"));
+pub fn wait_for_port_closed(port: u16, timeout: Duration) -> Result<()> {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        if !is_port_in_use(port) {
+            return Ok(());
         }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    Err(anyhow!("Timed out waiting for port {port} to close"))
+}
 
-        let url = extract_text(&result)
-            .ok_or_else(|| anyhow!("Failed to extract URL from ink-node output"))?;
+static NODE_URL: OnceLock<String> = OnceLock::new();
+static NODE_INIT: Mutex<()> = Mutex::new(());
 
-        // Verify the node is actually running
-        if !is_port_in_use(DEFAULT_NODE_PORT) {
-            return Err(anyhow!(
-                "Port {} not in use after launching ink-node",
-                DEFAULT_NODE_PORT
-            ));
-        }
+/// Port used by the shared test node (different from default 9944 to avoid conflicts).
+pub const SHARED_NODE_INK_PORT: u16 = 9945;
+/// ETH RPC port for shared test node (different from default 8545).
+pub const SHARED_NODE_ETH_PORT: u16 = 8546;
 
-        Ok(Self { executor, url })
+/// Start a local ink-node once per test process and return its WebSocket URL.
+///
+/// Uses non-default ports (9945/8546) to avoid conflicts with node lifecycle tests.
+/// Thread-safe: uses OnceLock + Mutex to ensure only one node is started even
+/// when called from multiple threads simultaneously.
+pub fn ink_node_url(executor: &PopExecutor) -> Result<String> {
+    // Fast path: already initialized (lock-free read)
+    if let Some(url) = NODE_URL.get() {
+        return Ok(url.clone());
     }
 
-    /// Get the node URL
-    pub fn url(&self) -> &str {
-        &self.url
+    // Slow path: acquire lock to ensure only one thread initializes
+    let _guard = NODE_INIT.lock().unwrap();
+
+    // Double-check after acquiring lock (another thread may have initialized)
+    if let Some(url) = NODE_URL.get() {
+        return Ok(url.clone());
     }
+
+    // We're the first: start the node
+    let result = up_ink_node(
+        executor,
+        UpInkNodeParams {
+            ink_node_port: Some(SHARED_NODE_INK_PORT),
+            eth_rpc_port: Some(SHARED_NODE_ETH_PORT),
+        },
+    )
+    .map_err(|e| anyhow!(e.to_string()))?;
+    if is_error(&result) {
+        let msg = text(&result).unwrap_or_else(|_| "Failed to launch ink-node".to_string());
+        return Err(anyhow!(msg));
+    }
+    let url = extract_text(&result)
+        .ok_or_else(|| anyhow!("Failed to extract URL from ink-node output"))?;
+
+    let (host, port) = parse_ws_host_port(&url).context("Failed to parse ink-node URL")?;
+    wait_for_port(&host, port, Duration::from_secs(30))
+        .context("ink-node not listening on expected port")?;
+
+    NODE_URL.set(url.clone()).ok();
+    Ok(url)
 }
 
-impl Drop for InkNode<'_> {
-    fn drop(&mut self) {
-        if let Err(e) = clean_nodes(self.executor, CleanNodesParams {}) {
-            eprintln!("[test cleanup] Failed to clean ink-node: {e}");
-        }
-    }
+/// Parse the host and port from a `ws://` URL.
+fn parse_ws_host_port(url: &str) -> Result<(String, u16)> {
+    let url = url
+        .trim()
+        .strip_prefix("ws://")
+        .ok_or_else(|| anyhow!("Expected ws:// URL, got {url}"))?;
+    let host_port = url.split('/').next().unwrap_or(url);
+    let (host, port) = host_port
+        .rsplit_once(':')
+        .ok_or_else(|| anyhow!("Missing port in URL: {host_port}"))?;
+    let port = port
+        .parse::<u16>()
+        .context("Invalid port in ink-node URL")?;
+    Ok((host.to_string(), port))
 }
 
-/// Check if a port is in use using lsof
+/// Extract the port from a `ws://` URL.
+#[allow(dead_code)]
+pub fn ws_port_from_url(url: &str) -> Result<u16> {
+    parse_ws_host_port(url).map(|(_, port)| port)
+}
+
+/// Check if a local port is accepting TCP connections.
 pub fn is_port_in_use(port: u16) -> bool {
-    Command::new("lsof")
-        .args(["-i", &format!(":{}", port)])
-        .output()
-        .map(|o| !o.stdout.is_empty())
-        .unwrap_or(false)
+    is_port_open("127.0.0.1", port)
+}
+
+fn is_port_open(host: &str, port: u16) -> bool {
+    let addrs = (host, port).to_socket_addrs();
+    match addrs {
+        Ok(mut addrs) => addrs.any(|addr| {
+            TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
+        }),
+        Err(_) => false,
+    }
+}
+
+pub fn parse_pids(output: &str) -> Result<Vec<u32>> {
+    fn parse_pid_list(input: &str) -> Vec<u32> {
+        input
+            .split_whitespace()
+            .filter_map(|token| {
+                let token = token.trim_matches(|c: char| !c.is_ascii_digit());
+                if token.is_empty() {
+                    None
+                } else {
+                    token.parse::<u32>().ok()
+                }
+            })
+            .collect()
+    }
+
+    for line in output.lines() {
+        let trimmed = line.trim().trim_start_matches('│').trim();
+        if let Some(rest) = trimmed.strip_prefix("pids:") {
+            let pids = parse_pid_list(rest);
+            if !pids.is_empty() {
+                return Ok(pids);
+            }
+        }
+        if let Some(start) = trimmed.find("kill -9") {
+            let rest = &trimmed[start + "kill -9".len()..];
+            let pids = parse_pid_list(rest);
+            if !pids.is_empty() {
+                return Ok(pids);
+            }
+        }
+    }
+
+    Err(anyhow!("No pids found in output"))
+}
+
+/// Test context providing an isolated working directory.
+///
+/// Provides a temporary workdir for contract operations without mutating
+/// global cwd. The real HOME/XDG environment is preserved so tests can
+/// access cached binaries (e.g., ink-node).
+pub struct TestContext {
+    /// Temporary directory (kept alive for test duration).
+    #[allow(dead_code)]
+    temp_dir: TempDir,
+    /// Working directory for contract operations.
+    pub workdir: PathBuf,
+}
+
+impl TestContext {
+    /// Create a new test context with an isolated working directory.
+    pub fn new() -> Result<Self> {
+        let temp_dir = TempDir::new().context("Failed to create temp dir")?;
+        let workdir = temp_dir.path().to_path_buf();
+
+        Ok(Self { temp_dir, workdir })
+    }
+
+    /// Create a PopExecutor configured to use this context's workdir.
+    pub fn executor(&self) -> Result<PopExecutor> {
+        let no_env: Vec<(String, String)> = vec![];
+        let executor = PopExecutor::with_overrides(Some(self.workdir.clone()), no_env);
+        executor
+            .execute(&["--version"])
+            .map_err(|e| anyhow!("Pop CLI is not available: {e}"))?;
+        Ok(executor)
+    }
 }
 
 /// A contract in a temp directory with optional build and deployment state.
 ///
-/// The returned guard keeps the temporary directory alive so the contract
-/// artifacts persist for the duration of the test. It temporarily changes
-/// the process working directory while creating the contract; prefer
-/// `serial` tests or single-threaded runs when using it.
-pub struct Contract<'a> {
+/// Use `Contract::with_context()` for isolated test execution without global
+/// cwd mutation.
+pub struct Contract {
+    /// Test context providing isolated temp directories.
     #[allow(dead_code)]
-    pub temp_dir: TempDir,
+    context: TestContext,
     pub path: PathBuf,
     pub address: Option<String>,
-    ink_node: Option<InkNode<'a>>,
+    node_url: Option<String>,
 }
 
-impl<'a> Contract<'a> {
-    /// Create a new contract from the standard template.
-    pub fn new(executor: &PopExecutor, name: &str) -> Result<Self> {
-        let temp_dir = TempDir::new().context("Failed to create temp dir")?;
-        let original_dir = std::env::current_dir().context("Failed to get cwd")?;
-        let _cwd_guard = CwdRestoreGuard::new(&original_dir);
-        std::env::set_current_dir(temp_dir.path()).context("Failed to enter temp dir")?;
-
+impl Contract {
+    /// Create a new contract using a TestContext for isolation.
+    ///
+    /// The executor should be obtained from `ctx.executor()`.
+    pub fn with_context(ctx: TestContext, executor: &PopExecutor, name: &str) -> Result<Self> {
         let create_params = CreateContractParams {
             name: name.to_string(),
             template: "standard".to_string(),
@@ -127,13 +247,13 @@ impl<'a> Contract<'a> {
             return Err(anyhow!("Contract creation failed: {}", msg));
         }
 
-        let contract_path = temp_dir.path().join(name);
+        let contract_path = ctx.workdir.join(name);
 
         Ok(Contract {
-            temp_dir,
+            context: ctx,
             path: contract_path,
             address: None,
-            ink_node: None,
+            node_url: None,
         })
     }
 
@@ -156,13 +276,11 @@ impl<'a> Contract<'a> {
     /// Sets the contract address on success.
     pub fn deploy(
         &mut self,
-        executor: &'a PopExecutor,
+        executor: &PopExecutor,
         constructor: Option<&str>,
         args: Option<&str>,
     ) -> Result<()> {
-        // Launch ink node
-        let ink_node = InkNode::launch(executor)?;
-        let url = ink_node.url().to_string();
+        let url = ink_node_url(executor).context("Failed to get shared ink-node URL")?;
 
         // Deploy the contract
         let deploy_params = DeployContractParams {
@@ -172,7 +290,7 @@ impl<'a> Contract<'a> {
             value: None,
             execute: Some(true),
             suri: Some(DEFAULT_SURI.to_string()),
-            url: Some(url),
+            url: Some(url.clone()),
         };
         let deploy_result =
             deploy_contract(executor, deploy_params, None).context("Failed to deploy contract")?;
@@ -187,13 +305,13 @@ impl<'a> Contract<'a> {
             .ok_or_else(|| anyhow!("Failed to parse contract address from output: {}", output))?;
 
         self.address = Some(address);
-        self.ink_node = Some(ink_node);
+        self.node_url = Some(url);
         Ok(())
     }
 
     /// Get the node URL if deployed.
     pub fn node_url(&self) -> Option<&str> {
-        self.ink_node.as_ref().map(|n| n.url())
+        self.node_url.as_deref()
     }
 }
 
@@ -225,28 +343,4 @@ fn parse_contract_address(output: &str) -> Option<String> {
     }
 
     None
-}
-
-/// Restores the working directory on drop to avoid leaving the process in a deleted temp dir.
-struct CwdRestoreGuard {
-    original_dir: PathBuf,
-}
-
-impl CwdRestoreGuard {
-    fn new(original_dir: &Path) -> Self {
-        Self {
-            original_dir: original_dir.to_path_buf(),
-        }
-    }
-}
-
-impl Drop for CwdRestoreGuard {
-    fn drop(&mut self) {
-        if let Err(e) = std::env::set_current_dir(&self.original_dir) {
-            eprintln!(
-                "[test cleanup] Failed to restore cwd to {}: {e}",
-                self.original_dir.display()
-            );
-        }
-    }
 }

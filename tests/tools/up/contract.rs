@@ -1,11 +1,10 @@
-use crate::common::{ink_node_url, is_error, is_success, text, Contract, TestContext, DEFAULT_SURI};
+use crate::common::{is_error, is_success, text, Contract, InkNode, TestEnv, DEFAULT_SURI};
 use anyhow::Result;
 use pop_mcp_server::tools::up::contract::{deploy_contract, DeployContractParams};
 
 #[test]
 fn deploy_contract_nonexistent_path_fails() -> Result<()> {
-    let ctx = TestContext::new()?;
-    let executor = ctx.executor()?;
+    let env = TestEnv::new()?;
     let params = DeployContractParams {
         path: "/nonexistent/path/to/contract".to_string(),
         constructor: None,
@@ -16,7 +15,7 @@ fn deploy_contract_nonexistent_path_fails() -> Result<()> {
         url: None,
     };
 
-    let result = deploy_contract(&executor, params, None)?;
+    let result = deploy_contract(env.executor(), params, None)?;
     assert!(is_error(&result));
     assert!(text(&result)?.contains("Deployment failed"));
     Ok(())
@@ -24,22 +23,19 @@ fn deploy_contract_nonexistent_path_fails() -> Result<()> {
 
 #[test]
 fn deploy_contract_succeeds_and_returns_address() -> Result<()> {
-    let ctx = TestContext::new()?;
-    let executor = ctx.executor()?;
-    let contract = Contract::with_context(ctx, &executor, "deploy_test")?;
-    contract.build(&executor)?;
-    let node_url = ink_node_url(&executor)?;
+    let env = TestEnv::new()?;
+    let contract = Contract::create_build_or_use()?;
 
     let result = deploy_contract(
-        &executor,
+        env.executor(),
         DeployContractParams {
-            path: contract.path.to_string_lossy().to_string(),
+            path: contract.path.display().to_string(),
             constructor: Some("new".to_string()),
             args: Some("false".to_string()),
             value: None,
             execute: Some(true),
             suri: Some(DEFAULT_SURI.to_string()),
-            url: Some(node_url),
+            url: Some(InkNode::start_or_get_url()?.to_string()),
         },
         None,
     )?;

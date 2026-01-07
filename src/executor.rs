@@ -1,8 +1,6 @@
 //! Command execution for Pop CLI
 
 #[cfg(feature = "pop-e2e")]
-use std::ffi::OsString;
-#[cfg(feature = "pop-e2e")]
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -43,15 +41,11 @@ impl CommandOutput {
 /// Real implementation of Pop CLI command executor.
 ///
 /// When the `pop-e2e` feature is enabled, the executor supports optional
-/// working directory and environment overrides for test isolation.
+/// working directory override for test isolation.
 #[derive(Debug, Clone, Default)]
 pub struct PopExecutor {
-    /// Override working directory for command execution (pop-e2e only).
     #[cfg(feature = "pop-e2e")]
     cwd: Option<PathBuf>,
-    /// Environment variable overrides (pop-e2e only).
-    #[cfg(feature = "pop-e2e")]
-    env: Vec<(OsString, OsString)>,
 }
 
 impl PopExecutor {
@@ -59,33 +53,19 @@ impl PopExecutor {
         Self::default()
     }
 
-    /// Create an executor with working directory and environment overrides.
-    ///
-    /// This is only available in `pop-e2e` builds for test isolation.
+    /// Create an executor with a working directory override.
     #[cfg(feature = "pop-e2e")]
-    pub fn with_overrides(
-        cwd: Option<PathBuf>,
-        env: impl IntoIterator<Item = (impl Into<OsString>, impl Into<OsString>)>,
-    ) -> Self {
-        Self {
-            cwd,
-            env: env.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
-        }
+    pub fn with_cwd(cwd: PathBuf) -> Self {
+        Self { cwd: Some(cwd) }
     }
 
     fn execute_raw(&self, args: &[&str]) -> PopMcpResult<CommandOutput> {
         let mut cmd = Command::new("pop");
         cmd.args(args);
 
-        // Apply overrides when pop-e2e feature is enabled
         #[cfg(feature = "pop-e2e")]
-        {
-            if let Some(ref cwd) = self.cwd {
-                cmd.current_dir(cwd);
-            }
-            if !self.env.is_empty() {
-                cmd.envs(self.env.iter().map(|(k, v)| (k, v)));
-            }
+        if let Some(ref cwd) = self.cwd {
+            cmd.current_dir(cwd);
         }
 
         let output = cmd.output().map_err(|e| {

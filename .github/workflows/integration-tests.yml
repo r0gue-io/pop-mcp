@@ -52,11 +52,11 @@ jobs:
           sudo apt-get clean &
           wait
 
-      - name: Install stable toolchain
+      - name: Install Rust 1.91 toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
+          toolchain: 1.91.0
           default: true
           target: wasm32-unknown-unknown
           components: rust-src, clippy
@@ -81,10 +81,15 @@ jobs:
           key: pop-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
 
       - name: Install pop
-        run: cargo install --locked --force pop-cli
+        run: cargo install --locked --force --git https://github.com/r0gue-io/pop-cli --branch main
 
       - name: Bootstrap pop binaries
         run: sudo "$(which pop)" install -y
+
+      - name: Smoke test ink-node
+        run: |
+          pop up ink-node -y --detach
+          pop clean node --all
 
       - name: Run integration tests
         env:

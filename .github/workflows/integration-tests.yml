@@ -52,11 +52,11 @@ jobs:
           sudo apt-get clean &
           wait
 
-      - name: Install Rust 1.91 toolchain
+      - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.91.0
+          toolchain: 1.91.1
           default: true
           target: wasm32-unknown-unknown
           components: rust-src, clippy

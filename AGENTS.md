@@ -12,7 +12,7 @@
 - `cargo clippy --all-features --all-targets` – Lint and fail on warnings; run before PRs.
 - `cargo build` / `cargo build --release` – Compile the server (release binary at `target/release/pop-mcp-server`).
 - `cargo run` – Run the MCP server from source.
-- `cargo test --features pop-e2e` – Integration tests that invoke Pop CLI and ink! nodes; ensure `pop` is on PATH and `lsof` is available.
+- `cargo test --features pop-e2e` – Integration tests (`/tests`) that invoke Pop CLI using `pop`, use `pop --help` to get a feel for it.
 
 ## Coding Style & Naming Conventions
 - Rust 2021 edition; use rustfmt defaults (4-space indent, trailing commas).
@@ -21,17 +21,12 @@
 - Keep tool output deterministic and human-readable; avoid panics in tool code paths.
 
 ## Testing Guidelines
-- Default to `cargo test --features pop-e2e` so tool flows are exercised end-to-end; tests assume Pop CLI and an ink! toolchain.
+- Default to `cargo test` and individual tests within the `/tests` folder. Only at the end you can test all integration tests `cargo test --features pop-e2e`.
 - Add fast unit tests inline with `#[cfg(test)]` when Pop CLI is not required; keep `cargo test` without features quick.
-- Use descriptive test names (e.g., `build_contract_rejects_missing_path`); prefer `serial_test` when tests mutate global environment or ports.
+- Use descriptive test names (e.g., `build_contract_rejects_missing_path`).
 - Use simple asserts without custom failure messages; let test names and assertion expressions speak for themselves.
+- Make sure each tool has an integration test using the Pop CLI.
 
 ## Commit & Pull Request Guidelines
 - Follow the existing conventional-style prefixes (e.g., `fix: …`, `refactor: …`); keep subjects imperative and ≤72 characters.
 - PRs should include a short summary, linked issues, test commands/results, and notes about Pop CLI or network prerequisites.
-- Add screenshots or logs when modifying tool outputs or developer ergonomics.
-
-## Security & Configuration Tips
-- Ensure Pop CLI binaries are trusted and on PATH before running e2e tests.
-- Avoid committing secrets in MCP tool params; prefer env variables for tokens.
-- The repo uses `rust-toolchain.toml`; keep toolchain alignment to avoid CI drift.

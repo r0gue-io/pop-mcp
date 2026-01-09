@@ -21,7 +21,7 @@ pub struct BuildContractParams {
 
 impl BuildContractParams {
     /// Validate the parameters
-    pub fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> Result<(), String> {
         if self.path.is_empty() {
             return Err("Path cannot be empty".to_owned());
         }
@@ -30,7 +30,7 @@ impl BuildContractParams {
 }
 
 /// Build command arguments for build_contract
-pub fn build_build_contract_args(params: &BuildContractParams) -> Vec<&str> {
+fn build_build_contract_args(params: &BuildContractParams) -> Vec<&str> {
     let mut args = vec!["build", "--path", params.path.as_str()];
 
     if params.release.unwrap_or(false) {

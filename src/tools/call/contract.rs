@@ -38,7 +38,7 @@ pub struct CallContractParams {
 }
 
 /// Build command arguments for call_contract
-pub fn build_call_contract_args(params: &CallContractParams) -> Vec<&str> {
+fn build_call_contract_args(params: &CallContractParams) -> Vec<&str> {
     let mut args = vec![
         "call",
         "contract",

@@ -37,7 +37,7 @@ pub struct DeployContractParams {
 }
 
 /// Build command arguments for deploy_contract
-pub fn build_deploy_contract_args<'a>(
+fn build_deploy_contract_args<'a>(
     params: &'a DeployContractParams,
     stored_url: Option<&'a str>,
 ) -> Vec<&'a str> {

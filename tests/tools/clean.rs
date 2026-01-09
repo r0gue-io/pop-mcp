@@ -1,9 +1,11 @@
 use crate::common::{
-    is_port_in_use, is_success, parse_pids, text, texts, ws_port_from_url, InkNode, TestEnv,
+    is_port_in_use, is_success, parse_pids, text, texts, wait_for_port_closed, ws_port_from_url,
+    InkNode, TestEnv,
 };
 use anyhow::Result;
 use pop_mcp_server::tools::clean::{clean_nodes, CleanNodesParams};
 use pop_mcp_server::tools::up::chain::{up_ink_node, UpInkNodeParams};
+use std::time::Duration;
 
 /// Ports for lifecycle test (different from shared node on 9945/8546).
 const TEST_INK_PORT: u16 = 9946;
@@ -43,7 +45,7 @@ fn up_ink_node_and_clean_nodes_lifecycle() -> Result<()> {
     // Clean up
     let result = clean_nodes(env.executor(), CleanNodesParams { pids })?;
     assert!(is_success(&result));
-    assert!(!is_port_in_use(port));
+    wait_for_port_closed(port, Duration::from_secs(30))?;
 
     Ok(())
 }

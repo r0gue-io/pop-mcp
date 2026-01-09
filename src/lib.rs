@@ -2,7 +2,6 @@
 //!
 //! This library provides MCP (Model Context Protocol) tools for interacting
 //! with Pop CLI, enabling AI assistants to help with smart contract development.
-
 pub mod error;
 pub mod executor;
 pub mod resources;

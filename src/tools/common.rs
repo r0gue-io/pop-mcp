@@ -3,12 +3,12 @@
 use rmcp::model::{CallToolResult, Content, RawContent};
 
 /// Create a success result with the given text
-pub fn success_result(text: impl Into<String>) -> CallToolResult {
+pub(crate) fn success_result(text: impl Into<String>) -> CallToolResult {
     CallToolResult::success(vec![Content::text(text.into())])
 }
 
 /// Create an error result with the given text
-pub fn error_result(text: impl Into<String>) -> CallToolResult {
+pub(crate) fn error_result(text: impl Into<String>) -> CallToolResult {
     CallToolResult::error(vec![Content::text(text.into())])
 }
 
@@ -21,6 +21,7 @@ pub fn extract_text(result: &CallToolResult) -> Option<String> {
 }
 
 /// Extract text content from a CallToolResult, returning empty string if missing.
-pub fn content_text(result: &CallToolResult) -> String {
+#[cfg(test)]
+pub(crate) fn content_text(result: &CallToolResult) -> String {
     extract_text(result).unwrap_or_default()
 }

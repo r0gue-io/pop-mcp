@@ -17,21 +17,20 @@ pub mod new;
 pub mod test;
 pub mod up;
 
-pub use build::contract::{build_build_contract_args, build_contract, BuildContractParams};
-pub use call::contract::{build_call_contract_args, call_contract, CallContractParams};
+pub use build::contract::{build_contract, BuildContractParams};
+pub use call::contract::{call_contract, CallContractParams};
 pub use clean::{clean_nodes, CleanNodesParams};
 pub use convert::{convert_address, ConvertAddressParams};
 pub use install::{
     check_pop_installation, install_pop_instructions, CheckPopInstallationParams,
     InstallPopInstructionsParams,
 };
-pub use new::contract::{
-    build_create_contract_args, create_contract, list_templates, CreateContractParams,
-    ListTemplatesParams,
-};
-pub use test::contract::{build_test_contract_args, test_contract, TestContractParams};
+pub use new::contract::{create_contract, CreateContractParams};
+pub use test::contract::{test_contract, TestContractParams};
 pub use up::chain::{up_ink_node, UpInkNodeParams};
-pub use up::contract::{build_deploy_contract_args, deploy_contract, DeployContractParams};
+pub use up::contract::{deploy_contract, DeployContractParams};
+
+pub(crate) use new::contract::{list_templates, ListTemplatesParams};
 
 /// Parameters for the pop_help tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
@@ -42,7 +41,10 @@ pub struct PopHelpParams {
 }
 
 /// Get help for Pop CLI commands.
-pub fn pop_help(executor: &PopExecutor, params: PopHelpParams) -> PopMcpResult<CallToolResult> {
+pub(crate) fn pop_help(
+    executor: &PopExecutor,
+    params: PopHelpParams,
+) -> PopMcpResult<CallToolResult> {
     let args = if let Some(ref command) = params.command {
         let mut cmd_parts: Vec<&str> = command.split_whitespace().collect();
         cmd_parts.push("--help");

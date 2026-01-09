@@ -21,7 +21,7 @@ pub struct TestContractParams {
 
 impl TestContractParams {
     /// Validate the parameters
-    pub fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> Result<(), String> {
         if self.path.is_empty() {
             return Err("Path cannot be empty".to_owned());
         }
@@ -30,7 +30,7 @@ impl TestContractParams {
 }
 
 /// Build command arguments for test_contract
-pub fn build_test_contract_args(params: &TestContractParams) -> Vec<&str> {
+fn build_test_contract_args(params: &TestContractParams) -> Vec<&str> {
     let mut args = vec!["test", "--path", params.path.as_str()];
 
     if params.e2e {

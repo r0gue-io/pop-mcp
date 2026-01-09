@@ -21,7 +21,7 @@ pub struct ConvertAddressParams {
 
 impl ConvertAddressParams {
     /// Validate the address parameter
-    pub fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> Result<(), String> {
         if self.address.is_empty() {
             return Err("Address cannot be empty".to_owned());
         }
@@ -30,7 +30,7 @@ impl ConvertAddressParams {
 }
 
 /// Build command arguments for convert_address
-pub fn build_convert_address_args(params: &ConvertAddressParams) -> [&str; 3] {
+fn build_convert_address_args(params: &ConvertAddressParams) -> [&str; 3] {
     ["convert", "address", params.address.as_str()]
 }
 

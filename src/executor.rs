@@ -8,18 +8,18 @@ use crate::error::{PopMcpError, PopMcpResult};
 
 /// Output from command execution.
 #[derive(Debug, Clone)]
-pub struct CommandOutput {
+struct CommandOutput {
     /// Standard output from the command.
-    pub stdout: String,
+    stdout: String,
     /// Standard error from the command.
-    pub stderr: String,
+    stderr: String,
     /// Whether the command exited successfully.
-    pub success: bool,
+    success: bool,
 }
 
 impl CommandOutput {
     /// Get combined output, preferring stderr for Pop CLI
-    pub fn combined(&self) -> String {
+    fn combined(&self) -> String {
         let mut result = String::new();
 
         if !self.stderr.is_empty() {

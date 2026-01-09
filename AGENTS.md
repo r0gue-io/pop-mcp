@@ -19,6 +19,7 @@
 - Modules and files use snake_case; types and traits use PascalCase; functions and variables use snake_case.
 - Add `anyhow::Context` on fallible paths; return `Result` from async entrypoints.
 - Keep tool output deterministic and human-readable; avoid panics in tool code paths.
+- Use `///` only on public items; for private items, prefer concise `//` and only when the comment adds real value (non-obvious behavior, invariants, tricky edge cases).
 
 ## Testing Guidelines
 - Default to `cargo test` and individual tests within the `/tests` folder. Only at the end you can test all integration tests `cargo test --features pop-e2e`.

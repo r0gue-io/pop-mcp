@@ -11,10 +11,10 @@ use crate::tools::common::{error_result, success_result};
 /// Parameters for the list_templates tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[allow(clippy::empty_structs_with_brackets)]
-pub struct ListTemplatesParams {}
+pub(crate) struct ListTemplatesParams {}
 
 /// List available ink! contract templates.
-pub fn list_templates(_params: ListTemplatesParams) -> PopMcpResult<CallToolResult> {
+pub(crate) fn list_templates(_params: ListTemplatesParams) -> PopMcpResult<CallToolResult> {
     let templates = "\
 Available ink! Contract Templates:\n\n\
 1. **standard** - Basic flipper contract (boolean toggle)\n\
@@ -45,7 +45,7 @@ pub struct CreateContractParams {
 
 impl CreateContractParams {
     /// Validate the contract name
-    pub fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> Result<(), String> {
         if self.name.is_empty() {
             return Err("Contract name cannot be empty".to_owned());
         }
@@ -60,7 +60,7 @@ impl CreateContractParams {
 }
 
 /// Build command arguments for create_contract
-pub fn build_create_contract_args(params: &CreateContractParams) -> [&str; 5] {
+fn build_create_contract_args(params: &CreateContractParams) -> [&str; 5] {
     [
         "new",
         "contract",

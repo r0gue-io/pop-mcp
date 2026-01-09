@@ -9,15 +9,20 @@ use crate::executor::PopExecutor;
 
 use super::common::{error_result, success_result};
 
+/// Parameters for the check_pop_installation tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[allow(clippy::empty_structs_with_brackets)]
 pub struct CheckPopInstallationParams {}
 
+/// Parameters for the install_pop_instructions tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct InstallPopInstructionsParams {
+    /// Target platform for installation instructions.
     #[schemars(description = "Platform: 'macos', 'linux', or 'source'")]
     pub platform: Option<String>,
 }
 
+/// Check if Pop CLI is installed and return version information.
 pub fn check_pop_installation(
     executor: &PopExecutor,
     _params: CheckPopInstallationParams,
@@ -31,6 +36,7 @@ pub fn check_pop_installation(
     }
 }
 
+/// Get installation instructions for Pop CLI.
 pub fn install_pop_instructions(
     params: InstallPopInstructionsParams,
 ) -> PopMcpResult<CallToolResult> {
@@ -77,13 +83,16 @@ pub fn install_pop_instructions(
 }
 
 #[cfg(test)]
+#[allow(clippy::panic)]
 mod tests {
     use super::*;
 
     #[test]
     fn install_pop_instructions_default() {
         let params = InstallPopInstructionsParams { platform: None };
-        let result = install_pop_instructions(params).unwrap();
+        let Ok(result) = install_pop_instructions(params) else {
+            panic!("Expected Ok result");
+        };
         assert!(!result.is_error.unwrap_or(false));
     }
 }

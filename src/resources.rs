@@ -6,16 +6,20 @@ use rmcp::ErrorData as McpError;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+/// Parameters for the search_documentation tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct SearchDocumentationParams {
+    /// Search query or topic.
     #[schemars(description = "Search query or topic")]
     pub query: String,
+    /// Scope to limit search to specific documentation.
     #[schemars(
         description = "Limit search to specific documentation: 'ink', 'pop', 'xcm', 'dedot', or 'all'"
     )]
     pub scope: Option<String>,
 }
 
+/// Search through Polkadot documentation for specific topics.
 pub async fn search_documentation(
     params: SearchDocumentationParams,
 ) -> Result<CallToolResult, McpError> {
@@ -126,6 +130,7 @@ async fn fetch_external_doc(url: &str) -> Result<String> {
     Ok(text)
 }
 
+/// Search documentation with the given query and optional scope filter.
 pub async fn search_docs(query: &str, scope: Option<String>) -> Result<CallToolResult> {
     let search_scope = match scope.as_deref() {
         Some("ink") => "ink",
@@ -151,7 +156,7 @@ pub async fn search_docs(query: &str, scope: Option<String>) -> Result<CallToolR
         }
 
         let content = match &res.source {
-            ResourceSource::Embedded(text) => text.to_string(),
+            ResourceSource::Embedded(text) => (*text).to_owned(),
             ResourceSource::External(url) => match fetch_external_doc(url).await {
                 Ok(text) => text,
                 Err(e) => {
@@ -209,16 +214,17 @@ pub async fn search_docs(query: &str, scope: Option<String>) -> Result<CallToolR
     Ok(CallToolResult::success(vec![Content::text(response)]))
 }
 
+/// List all available documentation resources.
 pub async fn list_resources() -> Result<ListResourcesResult> {
     let resources: Vec<Resource> = RESOURCES
         .iter()
         .map(|res| {
             Resource::new(
                 rmcp::model::RawResource {
-                    uri: res.uri.to_string(),
-                    name: res.name.to_string(),
+                    uri: (*res.uri).to_owned(),
+                    name: (*res.name).to_owned(),
                     description: Some(format!("{} resource", res.scope)),
-                    mime_type: Some("text/plain".to_string()),
+                    mime_type: Some("text/plain".to_owned()),
                     title: None,
                     size: None,
                     icons: None,
@@ -234,18 +240,19 @@ pub async fn list_resources() -> Result<ListResourcesResult> {
     })
 }
 
+/// Read a documentation resource by URI.
 pub async fn read_resource(uri: &str) -> Result<ReadResourceResult> {
     for res in RESOURCES {
         if res.uri == uri {
             let content = match &res.source {
-                ResourceSource::Embedded(text) => text.to_string(),
+                ResourceSource::Embedded(text) => (*text).to_owned(),
                 ResourceSource::External(url) => fetch_external_doc(url).await?,
             };
 
             return Ok(ReadResourceResult {
                 contents: vec![rmcp::model::ResourceContents::text(
                     content,
-                    uri.to_string(),
+                    (*uri).to_owned(),
                 )],
             });
         }

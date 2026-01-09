@@ -8,24 +8,30 @@ use crate::error::PopMcpResult;
 use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
-// Parameters
-
+/// Parameters for the deploy_contract tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct DeployContractParams {
+    /// Path to the contract directory.
     #[schemars(
         description = "Path to the contract directory (e.g., './my_contract' or 'my_contract')"
     )]
     pub path: String,
+    /// Constructor function to call.
     #[schemars(description = "Constructor function to call")]
     pub constructor: Option<String>,
+    /// Constructor arguments as space-separated values.
     #[schemars(description = "Constructor arguments as space-separated values")]
     pub args: Option<String>,
+    /// Initial balance to transfer to the contract (in tokens).
     #[schemars(description = "Initial balance to transfer to the contract (in tokens)")]
     pub value: Option<String>,
+    /// Whether to submit an extrinsic for on-chain execution.
     #[schemars(description = "Submit an extrinsic for on-chain execution")]
     pub execute: Option<bool>,
+    /// Secret key URI for signing.
     #[schemars(description = "Secret key URI for signing")]
     pub suri: Option<String>,
+    /// WebSocket URL of the node.
     #[schemars(description = "WebSocket URL of the node")]
     pub url: Option<String>,
 }
@@ -106,7 +112,7 @@ mod tests {
             Case {
                 name: "minimal",
                 params: DeployContractParams {
-                    path: "./my_contract".to_string(),
+                    path: "./my_contract".to_owned(),
                     constructor: None,
                     args: None,
                     value: None,
@@ -120,13 +126,13 @@ mod tests {
             Case {
                 name: "full_with_explicit_url",
                 params: DeployContractParams {
-                    path: "./my_contract".to_string(),
-                    constructor: Some("new".to_string()),
-                    args: Some("100 true".to_string()),
-                    value: Some("1000".to_string()),
+                    path: "./my_contract".to_owned(),
+                    constructor: Some("new".to_owned()),
+                    args: Some("100 true".to_owned()),
+                    value: Some("1000".to_owned()),
                     execute: Some(true),
-                    suri: Some("//Alice".to_string()),
-                    url: Some("ws://explicit:9944".to_string()),
+                    suri: Some("//Alice".to_owned()),
+                    url: Some("ws://explicit:9944".to_owned()),
                 },
                 stored_url: Some("ws://stored:9944"),
                 expected: vec![
@@ -150,7 +156,7 @@ mod tests {
             Case {
                 name: "stored_url_fallback",
                 params: DeployContractParams {
-                    path: "./my_contract".to_string(),
+                    path: "./my_contract".to_owned(),
                     constructor: None,
                     args: None,
                     value: None,

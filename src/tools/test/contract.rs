@@ -8,12 +8,13 @@ use crate::error::PopMcpResult;
 use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
-// Parameters
-
+/// Parameters for the test_contract tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct TestContractParams {
+    /// Path to the contract directory.
     #[schemars(description = "Path to the contract directory")]
     pub path: String,
+    /// Whether to run end-to-end tests.
     #[schemars(description = "Run end-to-end tests")]
     pub e2e: bool,
 }
@@ -22,7 +23,7 @@ impl TestContractParams {
     /// Validate the parameters
     pub fn validate(&self) -> Result<(), String> {
         if self.path.is_empty() {
-            return Err("Path cannot be empty".to_string());
+            return Err("Path cannot be empty".to_owned());
         }
         Ok(())
     }
@@ -63,7 +64,7 @@ mod tests {
     #[test]
     fn validate_rejects_empty_path() {
         let params = TestContractParams {
-            path: "".to_string(),
+            path: String::new(),
             e2e: false,
         };
         assert!(params.validate().is_err());
@@ -72,7 +73,7 @@ mod tests {
     #[test]
     fn build_args_basic() {
         let params = TestContractParams {
-            path: "./my_contract".to_string(),
+            path: "./my_contract".to_owned(),
             e2e: false,
         };
         let args = build_test_contract_args(&params);
@@ -82,7 +83,7 @@ mod tests {
     #[test]
     fn build_args_e2e() {
         let params = TestContractParams {
-            path: "./my_contract".to_string(),
+            path: "./my_contract".to_owned(),
             e2e: true,
         };
         let args = build_test_contract_args(&params);

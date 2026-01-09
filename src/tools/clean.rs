@@ -8,8 +8,10 @@ use crate::error::PopMcpResult;
 use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
+/// Parameters for the clean_nodes tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct CleanNodesParams {
+    /// Process IDs of nodes to stop.
     pub pids: Vec<u32>,
 }
 
@@ -22,8 +24,8 @@ pub fn clean_nodes(
         return Ok(error_result("At least one pid is required"));
     }
 
-    let mut args = vec!["clean".to_string(), "node".to_string(), "--pid".to_string()];
-    args.extend(params.pids.iter().map(|pid| pid.to_string()));
+    let mut args = vec!["clean".to_owned(), "node".to_owned(), "--pid".to_owned()];
+    args.extend(params.pids.iter().map(ToString::to_string));
     let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
 
     match executor.execute(&arg_refs) {
@@ -32,7 +34,7 @@ pub fn clean_nodes(
             params
                 .pids
                 .iter()
-                .map(|pid| pid.to_string())
+                .map(ToString::to_string)
                 .collect::<Vec<_>>()
                 .join(" "),
             output

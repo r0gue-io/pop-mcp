@@ -8,24 +8,31 @@ use crate::error::PopMcpResult;
 use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
-// Parameters
-
+/// Parameters for the call_contract tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct CallContractParams {
+    /// Path to the contract directory (needed for metadata).
     #[schemars(description = "Path to the contract directory (needed for contract metadata)")]
     pub path: String,
+    /// Contract address to call.
     #[schemars(description = "Contract address")]
     pub contract: String,
+    /// Message/method to call on the contract.
     #[schemars(description = "Message/method to call")]
     pub message: String,
+    /// Method arguments as space-separated values.
     #[schemars(description = "Method arguments as space-separated values")]
     pub args: Option<String>,
+    /// Value to transfer with the call (in tokens).
     #[schemars(description = "Value to transfer with the call (in tokens)")]
     pub value: Option<String>,
+    /// Whether to submit an extrinsic for on-chain execution.
     #[schemars(description = "Submit an extrinsic for on-chain execution")]
     pub execute: Option<bool>,
+    /// Secret key URI for signing.
     #[schemars(description = "Secret key URI for signing")]
     pub suri: Option<String>,
+    /// WebSocket URL of the node.
     #[schemars(description = "WebSocket URL of the node")]
     pub url: Option<String>,
 }
@@ -129,9 +136,9 @@ mod tests {
             Case {
                 name: "minimal",
                 params: CallContractParams {
-                    path: "./my_contract".to_string(),
-                    contract: "0x1234".to_string(),
-                    message: "get".to_string(),
+                    path: "./my_contract".to_owned(),
+                    contract: "0x1234".to_owned(),
+                    message: "get".to_owned(),
                     args: None,
                     value: None,
                     execute: None,
@@ -153,14 +160,14 @@ mod tests {
             Case {
                 name: "args_value_suri_execute_url",
                 params: CallContractParams {
-                    path: "./p".to_string(),
-                    contract: "0xabc".to_string(),
-                    message: "transfer".to_string(),
-                    args: Some("0x5678 100".to_string()),
-                    value: Some("10".to_string()),
+                    path: "./p".to_owned(),
+                    contract: "0xabc".to_owned(),
+                    message: "transfer".to_owned(),
+                    args: Some("0x5678 100".to_owned()),
+                    value: Some("10".to_owned()),
                     execute: Some(true),
-                    suri: Some("//Alice".to_string()),
-                    url: Some("ws://explicit:9944".to_string()),
+                    suri: Some("//Alice".to_owned()),
+                    url: Some("ws://explicit:9944".to_owned()),
                 },
                 expected: vec![
                     "call",

@@ -20,6 +20,7 @@ pub fn extract_text(result: &CallToolResult) -> Option<String> {
     })
 }
 
+/// Extract text content from a CallToolResult, returning empty string if missing.
 pub fn content_text(result: &CallToolResult) -> String {
-    extract_text(result).expect("CallToolResult must contain text content")
+    extract_text(result).unwrap_or_default()
 }

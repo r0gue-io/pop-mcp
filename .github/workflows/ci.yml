@@ -158,8 +158,7 @@ jobs:
       checks: write
       packages: read
     env:
-      # We cannot propagate the "missing_docs" flag, as otherwise other tests fail.
-      RUSTFLAGS: "-Dwarnings -Dmissing_docs"
+      RUSTDOCFLAGS: "-Dwarnings -Dmissing_docs"
     steps:
       - uses: actions/checkout@v4
 

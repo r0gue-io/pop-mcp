@@ -6,11 +6,14 @@ use std::process::Command;
 
 use crate::error::{PopMcpError, PopMcpResult};
 
-/// Output from command execution
+/// Output from command execution.
 #[derive(Debug, Clone)]
 pub struct CommandOutput {
+    /// Standard output from the command.
     pub stdout: String,
+    /// Standard error from the command.
     pub stderr: String,
+    /// Whether the command exited successfully.
     pub success: bool,
 }
 
@@ -31,7 +34,7 @@ impl CommandOutput {
         }
 
         if result.is_empty() {
-            "(Command succeeded but produced no output)".to_string()
+            "(Command succeeded but produced no output)".to_owned()
         } else {
             result
         }
@@ -49,6 +52,7 @@ pub struct PopExecutor {
 }
 
 impl PopExecutor {
+    /// Create a new executor with default settings.
     pub fn new() -> Self {
         Self::default()
     }
@@ -112,8 +116,8 @@ mod tests {
     #[test]
     fn command_output_combines_streams() {
         let output = CommandOutput {
-            stdout: "stdout content".to_string(),
-            stderr: "stderr content".to_string(),
+            stdout: "stdout content".to_owned(),
+            stderr: "stderr content".to_owned(),
             success: true,
         };
         assert!(output.combined().contains("stderr content"));

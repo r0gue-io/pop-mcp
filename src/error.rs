@@ -23,11 +23,11 @@ pub enum PopMcpError {
 impl fmt::Display for PopMcpError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PopMcpError::CommandExecution(msg) => write!(f, "Command execution error: {}", msg),
-            PopMcpError::InvalidInput(msg) => write!(f, "Invalid input: {}", msg),
-            PopMcpError::ResourceNotFound(msg) => write!(f, "Resource not found: {}", msg),
-            PopMcpError::NetworkError(msg) => write!(f, "Network error: {}", msg),
-            PopMcpError::Internal(msg) => write!(f, "Internal error: {}", msg),
+            Self::CommandExecution(msg) => write!(f, "Command execution error: {}", msg),
+            Self::InvalidInput(msg) => write!(f, "Invalid input: {}", msg),
+            Self::ResourceNotFound(msg) => write!(f, "Resource not found: {}", msg),
+            Self::NetworkError(msg) => write!(f, "Network error: {}", msg),
+            Self::Internal(msg) => write!(f, "Internal error: {}", msg),
         }
     }
 }
@@ -36,12 +36,12 @@ impl std::error::Error for PopMcpError {}
 
 impl From<anyhow::Error> for PopMcpError {
     fn from(err: anyhow::Error) -> Self {
-        PopMcpError::Internal(err.to_string())
+        Self::Internal(err.to_string())
     }
 }
 
 impl From<reqwest::Error> for PopMcpError {
     fn from(err: reqwest::Error) -> Self {
-        PopMcpError::NetworkError(err.to_string())
+        Self::NetworkError(err.to_string())
     }
 }

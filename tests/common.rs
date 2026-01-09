@@ -1,4 +1,14 @@
+//! Common test utilities and fixtures for pop-mcp-server integration tests.
 #![cfg(feature = "pop-e2e")]
+#![allow(
+    missing_docs,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::str_to_string,
+    clippy::use_self,
+    clippy::redundant_closure_for_method_calls
+)]
 
 use anyhow::{anyhow, Context, Result};
 use pop_mcp_server::executor::PopExecutor;
@@ -267,13 +277,6 @@ fn wait_for_port(host: &str, port: u16, timeout: Duration) -> Result<()> {
         return Ok(());
     }
     Err(anyhow!("Timed out waiting for port {host}:{port}"))
-}
-
-pub fn wait_for_port_closed(port: u16, timeout: Duration) -> Result<()> {
-    if wait_until(timeout, || !is_port_open("127.0.0.1", port)) {
-        return Ok(());
-    }
-    Err(anyhow!("Timed out waiting for port {port} to close"))
 }
 
 pub fn is_port_in_use(port: u16) -> bool {

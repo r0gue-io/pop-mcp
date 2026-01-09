@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::executor::PopExecutor;
 use crate::resources::SearchDocumentationParams;
-use crate::tools::{self, *};
+use crate::tools::{common, *};
 
 /// Pop MCP Server - provides tools for Polkadot ink! smart contract development
 #[derive(Clone)]
@@ -52,7 +52,7 @@ impl PopMcpServer {
         &self,
         Parameters(_): Parameters<CheckPopInstallationParams>,
     ) -> Result<CallToolResult, McpError> {
-        tools::check_pop_installation(&self.executor, CheckPopInstallationParams {})
+        check_pop_installation(&self.executor, CheckPopInstallationParams {})
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
@@ -61,8 +61,7 @@ impl PopMcpServer {
         &self,
         Parameters(params): Parameters<InstallPopInstructionsParams>,
     ) -> Result<CallToolResult, McpError> {
-        tools::install_pop_instructions(params)
-            .map_err(|e| McpError::internal_error(e.to_string(), None))
+        install_pop_instructions(params).map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
     #[tool(description = "List all available ink! contract templates")]
@@ -70,7 +69,7 @@ impl PopMcpServer {
         &self,
         Parameters(_): Parameters<ListTemplatesParams>,
     ) -> Result<CallToolResult, McpError> {
-        tools::list_templates(ListTemplatesParams {})
+        list_templates(ListTemplatesParams {})
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
@@ -79,7 +78,7 @@ impl PopMcpServer {
         &self,
         Parameters(params): Parameters<CreateContractParams>,
     ) -> Result<CallToolResult, McpError> {
-        tools::create_contract(&self.executor, params)
+        create_contract(&self.executor, params)
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
@@ -103,7 +102,7 @@ impl PopMcpServer {
         &self,
         Parameters(params): Parameters<BuildContractParams>,
     ) -> Result<CallToolResult, McpError> {
-        tools::build_contract(&self.executor, params)
+        build_contract(&self.executor, params)
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
@@ -112,7 +111,7 @@ impl PopMcpServer {
         &self,
         Parameters(params): Parameters<TestContractParams>,
     ) -> Result<CallToolResult, McpError> {
-        tools::test_contract(&self.executor, params)
+        test_contract(&self.executor, params)
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
@@ -122,7 +121,7 @@ impl PopMcpServer {
         Parameters(params): Parameters<DeployContractParams>,
     ) -> Result<CallToolResult, McpError> {
         let stored_url = self.get_stored_url();
-        tools::deploy_contract(&self.executor, params, stored_url.as_deref())
+        deploy_contract(&self.executor, params, stored_url.as_deref())
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
@@ -131,7 +130,7 @@ impl PopMcpServer {
         &self,
         Parameters(params): Parameters<CallContractParams>,
     ) -> Result<CallToolResult, McpError> {
-        tools::call_contract(&self.executor, params)
+        call_contract(&self.executor, params)
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
@@ -142,12 +141,12 @@ impl PopMcpServer {
         &self,
         Parameters(params): Parameters<UpInkNodeParams>,
     ) -> Result<CallToolResult, McpError> {
-        let result = tools::up_ink_node(&self.executor, params)
+        let result = up_ink_node(&self.executor, params)
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
 
         // Store the WebSocket URL for later use (result contains the URL on success)
         if result.is_error != Some(true) {
-            if let Some(url) = tools::common::extract_text(&result) {
+            if let Some(url) = common::extract_text(&result) {
                 if let Ok(mut stored_url) = self.node_websocket_url.lock() {
                     *stored_url = Some(url);
                 }
@@ -162,7 +161,7 @@ impl PopMcpServer {
         &self,
         Parameters(params): Parameters<CleanNodesParams>,
     ) -> Result<CallToolResult, McpError> {
-        tools::clean_nodes(&self.executor, params)
+        clean_nodes(&self.executor, params)
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
@@ -171,8 +170,7 @@ impl PopMcpServer {
         &self,
         Parameters(params): Parameters<PopHelpParams>,
     ) -> Result<CallToolResult, McpError> {
-        tools::pop_help(&self.executor, params)
-            .map_err(|e| McpError::internal_error(e.to_string(), None))
+        pop_help(&self.executor, params).map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
     #[tool(description = "Convert between Ethereum and Substrate (Polkadot) addresses")]
@@ -180,7 +178,7 @@ impl PopMcpServer {
         &self,
         Parameters(params): Parameters<ConvertAddressParams>,
     ) -> Result<CallToolResult, McpError> {
-        tools::convert_address(&self.executor, params)
+        convert_address(&self.executor, params)
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
@@ -207,7 +205,7 @@ impl ServerHandler for PopMcpServer {
             server_info: Implementation::from_build_env(),
             instructions: Some(
                 "Pop CLI MCP Server - Tools for Polkadot ink! smart contract and parachain development using Pop CLI"
-                    .to_string(),
+                    .to_owned(),
             ),
         }
     }
@@ -242,6 +240,7 @@ impl ServerHandler for PopMcpServer {
 }
 
 #[cfg(test)]
+#[allow(clippy::panic)]
 mod tests {
     use super::*;
 
@@ -258,9 +257,10 @@ mod tests {
         assert!(info.capabilities.resources.is_some());
 
         // Verify instructions
-        assert!(info.instructions.is_some());
-        let instructions = info.instructions.unwrap();
-        assert!(instructions.contains("Pop CLI MCP Server"));
+        assert!(info
+            .instructions
+            .as_ref()
+            .is_some_and(|i| i.contains("Pop CLI MCP Server")));
     }
 
     #[test]
@@ -280,14 +280,13 @@ mod tests {
         assert!(server.get_stored_url().is_none());
 
         // Store a URL
-        {
-            let mut guard = server.node_websocket_url.lock().unwrap();
-            *guard = Some("ws://localhost:9944".to_string());
+        if let Ok(mut guard) = server.node_websocket_url.lock() {
+            *guard = Some("ws://localhost:9944".to_owned());
         }
 
         // Verify retrieval
         let url = server.get_stored_url();
-        assert_eq!(url, Some("ws://localhost:9944".to_string()));
+        assert_eq!(url, Some("ws://localhost:9944".to_owned()));
     }
 
     #[test]
@@ -313,7 +312,9 @@ mod tests {
         }
 
         for tool in tools {
-            let schema_value = serde_json::to_value(&tool.input_schema).unwrap();
+            let Ok(schema_value) = serde_json::to_value(&tool.input_schema) else {
+                panic!("Tool '{}' schema failed to serialize", tool.name);
+            };
 
             // Check top-level type
             let schema_type = schema_value.get("type").and_then(|v| v.as_str());

@@ -8,12 +8,13 @@ use crate::error::PopMcpResult;
 use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
-// Parameters
-
+/// Parameters for the build_contract tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct BuildContractParams {
+    /// Path to the contract directory.
     #[schemars(description = "Path to the contract directory")]
     pub path: String,
+    /// Whether to build in release mode.
     #[schemars(description = "Build in release mode with optimizations")]
     pub release: Option<bool>,
 }
@@ -22,7 +23,7 @@ impl BuildContractParams {
     /// Validate the parameters
     pub fn validate(&self) -> Result<(), String> {
         if self.path.is_empty() {
-            return Err("Path cannot be empty".to_string());
+            return Err("Path cannot be empty".to_owned());
         }
         Ok(())
     }
@@ -63,7 +64,7 @@ mod tests {
     #[test]
     fn validate_rejects_empty_path() {
         let params = BuildContractParams {
-            path: "".to_string(),
+            path: String::new(),
             release: None,
         };
         assert!(params.validate().is_err());
@@ -72,7 +73,7 @@ mod tests {
     #[test]
     fn build_args_include_release_flag() {
         let params = BuildContractParams {
-            path: "./my_contract".to_string(),
+            path: "./my_contract".to_owned(),
             release: Some(true),
         };
         let args = build_build_contract_args(&params);

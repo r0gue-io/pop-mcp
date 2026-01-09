@@ -9,10 +9,10 @@ use crate::executor::PopExecutor;
 
 use super::common::{error_result, success_result};
 
-// Parameters
-
+/// Parameters for the convert_address tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct ConvertAddressParams {
+    /// The address to convert (SS58 or Ethereum format).
     #[schemars(
         description = "The Substrate or Ethereum address to convert (supports SS58 format or raw 32-byte hex)"
     )]
@@ -23,7 +23,7 @@ impl ConvertAddressParams {
     /// Validate the address parameter
     pub fn validate(&self) -> Result<(), String> {
         if self.address.is_empty() {
-            return Err("Address cannot be empty".to_string());
+            return Err("Address cannot be empty".to_owned());
         }
         Ok(())
     }
@@ -59,7 +59,7 @@ mod tests {
     #[test]
     fn convert_empty_address_fails_before_execution() {
         let params = ConvertAddressParams {
-            address: "".to_string(),
+            address: String::new(),
         };
         assert!(params.validate().is_err());
     }

@@ -33,12 +33,15 @@ pub use test::contract::{build_test_contract_args, test_contract, TestContractPa
 pub use up::chain::{up_ink_node, UpInkNodeParams};
 pub use up::contract::{build_deploy_contract_args, deploy_contract, DeployContractParams};
 
+/// Parameters for the pop_help tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct PopHelpParams {
+    /// Command to get help for.
     #[schemars(description = "Command to get help for")]
     pub command: Option<String>,
 }
 
+/// Get help for Pop CLI commands.
 pub fn pop_help(executor: &PopExecutor, params: PopHelpParams) -> PopMcpResult<CallToolResult> {
     let args = if let Some(ref command) = params.command {
         let mut cmd_parts: Vec<&str> = command.split_whitespace().collect();

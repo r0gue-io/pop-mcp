@@ -8,12 +8,13 @@ use crate::error::PopMcpResult;
 use crate::executor::PopExecutor;
 use crate::tools::common::error_result;
 
+/// Parameters for the up_ink_node tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct UpInkNodeParams {
-    /// The port to be used for the ink! node (default: 9944)
+    /// The port to be used for the ink! node (default: 9944).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ink_node_port: Option<u16>,
-    /// The port to be used for the Ethereum RPC node (default: 8545)
+    /// The port to be used for the Ethereum RPC node (default: 8545).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub eth_rpc_port: Option<u16>,
 }
@@ -28,7 +29,7 @@ fn parse_ws_url(output: &str) -> Option<String> {
         // Look for "url: ws://..." pattern
         if trimmed.starts_with("url:") && trimmed.contains("ws://") {
             if let Some(start) = trimmed.find("ws://") {
-                return Some(trimmed[start..].trim_end_matches('/').to_string());
+                return Some(trimmed[start..].trim_end_matches('/').to_owned());
             }
         }
     }
@@ -89,7 +90,7 @@ pub fn up_ink_node(
                 if let Some(pids) = parse_pids(&output) {
                     let pid_text = pids
                         .iter()
-                        .map(|pid| pid.to_string())
+                        .map(ToString::to_string)
                         .collect::<Vec<_>>()
                         .join(" ");
                     content.push(Content::text(format!("pids: {}", pid_text)));
@@ -123,7 +124,7 @@ mod tests {
 └  ✅ Ink! node bootstrapped successfully. Run `kill -9 11040 11253` to terminate it.
 "#;
         let url = parse_ws_url(output);
-        assert_eq!(url, Some("ws://localhost:9944".to_string()));
+        assert_eq!(url, Some("ws://localhost:9944".to_owned()));
     }
 
     #[test]

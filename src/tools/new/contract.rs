@@ -8,11 +8,12 @@ use crate::error::PopMcpResult;
 use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
-// Parameters
-
+/// Parameters for the list_templates tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[allow(clippy::empty_structs_with_brackets)]
 pub struct ListTemplatesParams {}
 
+/// List available ink! contract templates.
 pub fn list_templates(_params: ListTemplatesParams) -> PopMcpResult<CallToolResult> {
     let templates = "\
 Available ink! Contract Templates:\n\n\
@@ -27,12 +28,15 @@ Available ink! Contract Templates:\n\n\
     Ok(success_result(templates))
 }
 
+/// Parameters for the create_contract tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 pub struct CreateContractParams {
+    /// Name of the contract project.
     #[schemars(
         description = "Name of the contract project (alphanumeric characters and underscores only)"
     )]
     pub name: String,
+    /// Template to use for the contract.
     #[schemars(
         description = "Template to use (standard, erc20, erc721, erc1155, dns, cross-contract-calls, multisig)"
     )]
@@ -43,12 +47,12 @@ impl CreateContractParams {
     /// Validate the contract name
     pub fn validate(&self) -> Result<(), String> {
         if self.name.is_empty() {
-            return Err("Contract name cannot be empty".to_string());
+            return Err("Contract name cannot be empty".to_owned());
         }
         if !self.name.chars().all(|c| c.is_alphanumeric() || c == '_') {
             return Err(
                 "Contract names can only contain alphanumeric characters and underscores"
-                    .to_string(),
+                    .to_owned(),
             );
         }
         Ok(())
@@ -256,6 +260,7 @@ async fn adapt_frontend_to_contract<E: CommandExecutor>(
 */
 
 #[cfg(test)]
+#[allow(clippy::panic)]
 mod tests {
     use super::*;
     use crate::tools::common::content_text;
@@ -264,8 +269,8 @@ mod tests {
     fn validate_allows_valid_names() {
         for name in ["mytoken123", "my_token_v2"] {
             let params = CreateContractParams {
-                name: name.to_string(),
-                template: "standard".to_string(),
+                name: (*name).to_owned(),
+                template: "standard".to_owned(),
             };
             assert!(params.validate().is_ok());
         }
@@ -277,8 +282,8 @@ mod tests {
             "", "my-token", "my token", "my@token", "my#token", "my.token",
         ] {
             let params = CreateContractParams {
-                name: name.to_string(),
-                template: "standard".to_string(),
+                name: (*name).to_owned(),
+                template: "standard".to_owned(),
             };
             assert!(params.validate().is_err());
         }
@@ -287,8 +292,8 @@ mod tests {
     #[test]
     fn build_args_include_template() {
         let params = CreateContractParams {
-            name: "my_contract".to_string(),
-            template: "erc20".to_string(),
+            name: "my_contract".to_owned(),
+            template: "erc20".to_owned(),
         };
         let args = build_create_contract_args(&params);
         assert_eq!(
@@ -299,8 +304,10 @@ mod tests {
 
     #[test]
     fn list_templates_includes_known_entries() {
-        let result = list_templates(ListTemplatesParams {}).unwrap();
-        assert!(!result.is_error.unwrap());
+        let Ok(result) = list_templates(ListTemplatesParams {}) else {
+            panic!("Expected Ok result");
+        };
+        assert!(!result.is_error.unwrap_or(true));
         let text = content_text(&result);
         for expected in [
             "standard",

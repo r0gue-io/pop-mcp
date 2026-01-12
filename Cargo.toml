@@ -9,9 +9,8 @@ repository = "https://github.com/r0gue-io/pop-mcp"
 homepage = "https://github.com/r0gue-io/pop-mcp"
 keywords = ["mcp", "polkadot", "ink", "substrate", "smart-contracts"]
 
-[[bin]]
-name = "pop-mcp-server"
-path = "src/main.rs"
+[features]
+pop-e2e = ["tempfile"]
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
@@ -21,6 +20,11 @@ serde_json = "1"
 schemars = "1.0"
 anyhow = "1.0"
 reqwest = { version = "0.11", features = ["json"] }
+tempfile = { version = "3", optional = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3"
 
 [profile.release]
 opt-level = "z"     # Optimize for size
@@ -28,3 +32,39 @@ lto = true          # Enable link-time optimization
 codegen-units = 1   # Better optimization
 strip = true        # Strip symbols
 panic = "abort"     # Smaller binary
+
+[profile.production]
+inherits = "release"
+
+[lints.rust]
+missing_docs = "deny"
+unsafe_code = "deny"
+rust_2018_idioms = "deny"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
+unused_lifetimes = "deny"
+unused_qualifications = "deny"
+
+[lints.clippy]
+correctness = "deny"
+complexity = "deny"
+perf = "deny"
+style = "deny"
+suspicious = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+clone_on_ref_ptr = "deny"
+empty_structs_with_brackets = "deny"
+expl_impl_clone_on_copy = "deny"
+implicit_clone = "deny"
+manual_string_new = "deny"
+redundant_closure_for_method_calls = "deny"
+semicolon_if_nothing_returned = "deny"
+str_to_string = "deny"
+use_self = "deny"

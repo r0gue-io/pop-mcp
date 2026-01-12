@@ -1,152 +1,97 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Tag to release (e.g., v0.1.0)'
-        required: true
-        type: string
+      ref:
+        description: 'Ref to build binaries from (branch, tag, or commit)'
+        required: false
 
 jobs:
   build-binaries:
-    name: Build ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
+    name: Build ${{ matrix.platform.target }}
+    runs-on: ${{ matrix.platform.os }}
     permissions:
       contents: write
     strategy:
       matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: x86_64-apple-darwin
-            os: macos-latest
-          - target: aarch64-apple-darwin
-            os: macos-latest
+        platform:
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: macos-14
+            target: x86_64-apple-darwin
+    env:
+      RUSTFLAGS: ${{ matrix.platform.target == 'aarch64-unknown-linux-gnu' && '-C linker=aarch64-linux-gnu-gcc' || '' }}
+      ARTIFACT_NAME: pop-mcp-server-${{ matrix.platform.target }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
-          target: ${{ matrix.target }}
-          profile: minimal
-          override: true
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.ref }}
+
+      - name: Install packages (Linux)
+        if: contains(matrix.platform.target, 'linux')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler ${{ contains(matrix.platform.target, 'aarch64') && 'crossbuild-essential-arm64' || '' }}
+          protoc --version
+
+      - name: Install packages (macOS)
+        if: contains(matrix.platform.target, 'apple')
+        run: |
+          brew install protobuf
+          protoc --version
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: ${{ matrix.target }}
+          prefix-key: ${{ matrix.platform.target }}
           shared-key: release
           cache-on-failure: true
 
-      - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
+      - name: Build binary
+        run: cargo build --locked --profile=production --target ${{ matrix.platform.target }}
 
-      - name: Prepare Binary
+      - name: Package binary (Linux)
+        if: contains(matrix.platform.target, 'linux')
         run: |
-          cd target/${{ matrix.target }}/release
-          BINARY_NAME="pop-mcp-server-${{ matrix.target }}"
-          mv pop-mcp-server $BINARY_NAME
-          tar czf $BINARY_NAME.tar.gz $BINARY_NAME
-          sha256sum $BINARY_NAME.tar.gz > $BINARY_NAME.tar.gz.sha256 || shasum -a 256 $BINARY_NAME.tar.gz > $BINARY_NAME.tar.gz.sha256
+          cd target/${{ matrix.platform.target }}/production
+          mv pop-mcp-server "${ARTIFACT_NAME}"
+          tar -czf "${ARTIFACT_NAME}.tar.gz" "${ARTIFACT_NAME}"
+          sha256sum "${ARTIFACT_NAME}.tar.gz" > "${ARTIFACT_NAME}.tar.gz.sha256"
+
+      - name: Package binary (macOS)
+        if: contains(matrix.platform.target, 'apple')
+        run: |
+          cd target/${{ matrix.platform.target }}/production
+          mv pop-mcp-server "${ARTIFACT_NAME}"
+          tar -czf "${ARTIFACT_NAME}.tar.gz" "${ARTIFACT_NAME}"
+          shasum -a 256 "${ARTIFACT_NAME}.tar.gz" > "${ARTIFACT_NAME}.tar.gz.sha256"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: binary-${{ matrix.target }}
+          name: binary-${{ matrix.platform.target }}
           path: |
-            target/${{ matrix.target }}/release/pop-mcp-server-${{ matrix.target }}.tar.gz
-            target/${{ matrix.target }}/release/pop-mcp-server-${{ matrix.target }}.tar.gz.sha256
+            target/${{ matrix.platform.target }}/production/${{ env.ARTIFACT_NAME }}.tar.gz
+            target/${{ matrix.platform.target }}/production/${{ env.ARTIFACT_NAME }}.tar.gz.sha256
 
-  create-release:
-    name: Create Release
-    needs: build-binaries
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Get version
-        id: get_version
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "version=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
-          else
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - name: Upload to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
         with:
-          path: artifacts
-
-      - name: Display structure of downloaded files
-        run: ls -R artifacts
-
-      - name: Prepare files for release
-        run: |
-          mkdir -p release-files
-          find artifacts -name "*.tar.gz" -exec cp {} release-files/ \;
-          find artifacts -name "*.sha256" -exec cp {} release-files/ \;
-          ls -la release-files/
-
-      - name: Create release notes
-        run: |
-          cat > release_notes.md << 'EOF'
-          ## Pop MCP Server ${{ steps.get_version.outputs.version }}
-
-          Download the binary for your platform below.
-
-          ### Installation
-
-          ```bash
-          # macOS ARM64 (Apple Silicon)
-          curl -L https://github.com/r0gue-io/pop-mcp/releases/download/${{ steps.get_version.outputs.version }}/pop-mcp-server-aarch64-apple-darwin.tar.gz | tar xz
-          chmod +x pop-mcp-server-aarch64-apple-darwin
-          sudo mv pop-mcp-server-aarch64-apple-darwin /usr/local/bin/pop-mcp-server
-
-          # macOS Intel
-          curl -L https://github.com/r0gue-io/pop-mcp/releases/download/${{ steps.get_version.outputs.version }}/pop-mcp-server-x86_64-apple-darwin.tar.gz | tar xz
-          chmod +x pop-mcp-server-x86_64-apple-darwin
-          sudo mv pop-mcp-server-x86_64-apple-darwin /usr/local/bin/pop-mcp-server
-
-          # Linux
-          curl -L https://github.com/r0gue-io/pop-mcp/releases/download/${{ steps.get_version.outputs.version }}/pop-mcp-server-x86_64-unknown-linux-gnu.tar.gz | tar xz
-          chmod +x pop-mcp-server-x86_64-unknown-linux-gnu
-          sudo mv pop-mcp-server-x86_64-unknown-linux-gnu /usr/local/bin/pop-mcp-server
-          ```
-
-          ### Configuration
-
-          Add to your `~/.claude.json`:
-
-          ```json
-          {
-            "mcpServers": {
-              "pop-cli": {
-                "type": "stdio",
-                "command": "pop-mcp-server",
-                "args": [],
-                "env": {}
-              }
-            }
-          }
-          ```
-          EOF
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        run: |
-          gh release create ${{ steps.get_version.outputs.version }} \
-            --title "Release ${{ steps.get_version.outputs.version }}" \
-            --notes-file release_notes.md \
-            release-files/*
+          files: |
+            target/${{ matrix.platform.target }}/production/${{ env.ARTIFACT_NAME }}.tar.gz
+            target/${{ matrix.platform.target }}/production/${{ env.ARTIFACT_NAME }}.tar.gz.sha256

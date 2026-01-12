@@ -1,0 +1,98 @@
+name: integration tests
+
+permissions:
+  contents: read
+  packages: read
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+env:
+  CARGO_TERM_COLOR: always
+  GITHUB_ACTOR: pop-mcp
+  CARGO_INCREMENTAL: 1
+  RUST_BACKTRACE: 1
+  RUSTFLAGS: "-Dwarnings"
+  RUSTDOCFLAGS: "-Dwarnings"
+
+concurrency:
+  # Cancel any in-progress jobs for the same pull request or branch
+  group: integration-tests-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration-tests:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free up space on runner
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -xeuo pipefail
+          sudo rm -rf /usr/local/lib/android &
+          sudo rm -rf /usr/share/dotnet &
+          sudo rm -rf /usr/share/swift &
+          if command -v docker &> /dev/null; then
+            sudo docker image prune -af &
+          fi
+          sudo apt-get clean &
+          wait
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.91.1
+          default: true
+          target: wasm32-unknown-unknown
+          components: rust-src, clippy
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: false
+          shared-key: shared-linux-pop-e2e-${{ github.head_ref || github.ref_name }}
+
+      - name: Install packages (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler clang cmake
+          protoc --version
+
+      - name: Cache pop assets
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pop
+          key: pop-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install pop
+        run: cargo install --locked --force --git https://github.com/r0gue-io/pop-cli --branch main
+
+      - name: Bootstrap pop binaries
+        run: sudo "$(which pop)" install -y
+
+      - name: Smoke test ink-node
+        run: |
+          pop up ink-node -y --detach
+          pop clean node --all
+
+      - name: Run integration tests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cargo test --locked --features pop-e2e

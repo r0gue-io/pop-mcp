@@ -10,6 +10,7 @@ use crate::tools::common::{error_result, success_result};
 
 /// Parameters for the build_contract tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[schemars(extend("properties" = {}))]
 pub struct BuildContractParams {
     /// Path to the contract directory.
     #[schemars(description = "Path to the contract directory")]

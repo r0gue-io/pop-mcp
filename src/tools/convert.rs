@@ -11,6 +11,7 @@ use super::common::{error_result, success_result};
 
 /// Parameters for the convert_address tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[schemars(extend("properties" = {}))]
 pub struct ConvertAddressParams {
     /// The address to convert (SS58 or Ethereum format).
     #[schemars(

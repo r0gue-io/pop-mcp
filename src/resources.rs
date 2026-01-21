@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 /// Parameters for the search_documentation tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[schemars(extend("properties" = {}))]
 pub struct SearchDocumentationParams {
     /// Search query or topic.
     #[schemars(description = "Search query or topic")]

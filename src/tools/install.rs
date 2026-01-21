@@ -11,11 +11,13 @@ use super::common::{error_result, success_result};
 
 /// Parameters for the check_pop_installation tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[schemars(extend("properties" = {}))]
 #[allow(clippy::empty_structs_with_brackets)]
 pub struct CheckPopInstallationParams {}
 
 /// Parameters for the install_pop_instructions tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[schemars(extend("properties" = {}))]
 pub struct InstallPopInstructionsParams {
     /// Target platform for installation instructions.
     #[schemars(description = "Platform: 'macos', 'linux', or 'source'")]

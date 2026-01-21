@@ -34,6 +34,7 @@ pub(crate) use new::contract::{list_templates, ListTemplatesParams};
 
 /// Parameters for the pop_help tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[schemars(extend("properties" = {}))]
 pub struct PopHelpParams {
     /// Command to get help for.
     #[schemars(description = "Command to get help for")]

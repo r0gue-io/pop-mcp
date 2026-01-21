@@ -10,6 +10,7 @@ use crate::tools::common::{error_result, success_result};
 
 /// Parameters for the deploy_contract tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[schemars(extend("properties" = {}))]
 pub struct DeployContractParams {
     /// Path to the contract directory.
     #[schemars(

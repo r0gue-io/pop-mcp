@@ -10,6 +10,7 @@ use crate::tools::common::{error_result, success_result};
 
 /// Parameters for the list_templates tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[schemars(extend("properties" = {}))]
 #[allow(clippy::empty_structs_with_brackets)]
 pub(crate) struct ListTemplatesParams {}
 
@@ -30,6 +31,7 @@ Available ink! Contract Templates:\n\n\
 
 /// Parameters for the create_contract tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[schemars(extend("properties" = {}))]
 pub struct CreateContractParams {
     /// Name of the contract project.
     #[schemars(

@@ -10,6 +10,7 @@ use crate::tools::common::error_result;
 
 /// Parameters for the up_ink_node tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[schemars(extend("properties" = {}))]
 pub struct UpInkNodeParams {
     /// The port to be used for the ink! node (default: 9944).
     #[serde(skip_serializing_if = "Option::is_none")]

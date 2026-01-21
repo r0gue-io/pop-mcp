@@ -10,6 +10,7 @@ use crate::tools::common::{error_result, success_result};
 
 /// Parameters for the clean_nodes tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[schemars(extend("properties" = {}))]
 pub struct CleanNodesParams {
     /// Process IDs of nodes to stop.
     pub pids: Vec<u32>,

@@ -10,6 +10,7 @@ use crate::tools::common::{error_result, success_result};
 
 /// Parameters for the call_contract tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[schemars(extend("properties" = {}))]
 pub struct CallContractParams {
     /// Path to the contract directory (needed for metadata).
     #[schemars(description = "Path to the contract directory (needed for contract metadata)")]

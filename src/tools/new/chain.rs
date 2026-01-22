@@ -158,7 +158,7 @@ mod tests {
                 symbol: None,
                 decimals: None,
             };
-            assert!(params.validate().is_ok(), "Expected {} to be valid", name);
+            assert!(params.validate().is_ok());
         }
     }
 

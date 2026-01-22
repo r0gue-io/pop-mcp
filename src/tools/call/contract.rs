@@ -128,14 +128,12 @@ mod tests {
     #[test]
     fn build_args_variants() {
         struct Case {
-            name: &'static str,
             params: CallContractParams,
             expected: Vec<&'static str>,
         }
 
         let cases = vec![
             Case {
-                name: "minimal",
                 params: CallContractParams {
                     path: "./my_contract".to_owned(),
                     contract: "0x1234".to_owned(),
@@ -159,7 +157,6 @@ mod tests {
                 ],
             },
             Case {
-                name: "args_value_suri_execute_url",
                 params: CallContractParams {
                     path: "./p".to_owned(),
                     contract: "0xabc".to_owned(),
@@ -196,7 +193,7 @@ mod tests {
 
         for case in cases {
             let args = build_call_contract_args(&case.params);
-            assert_eq!(args, case.expected, "case {}", case.name);
+            assert_eq!(args, case.expected);
         }
     }
 }

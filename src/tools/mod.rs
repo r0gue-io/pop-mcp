@@ -17,6 +17,7 @@ pub mod new;
 pub mod test;
 pub mod up;
 
+pub use build::chain::{build_chain, BuildChainParams};
 pub use build::contract::{build_contract, BuildContractParams};
 pub use call::contract::{call_contract, CallContractParams};
 pub use clean::{clean_nodes, CleanNodesParams};

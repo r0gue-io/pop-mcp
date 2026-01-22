@@ -103,7 +103,6 @@ mod tests {
     #[test]
     fn build_args_variants() {
         struct Case {
-            name: &'static str,
             params: DeployContractParams,
             stored_url: Option<&'static str>,
             expected: Vec<&'static str>,
@@ -111,7 +110,6 @@ mod tests {
 
         let cases = vec![
             Case {
-                name: "minimal",
                 params: DeployContractParams {
                     path: "./my_contract".to_owned(),
                     constructor: None,
@@ -125,7 +123,6 @@ mod tests {
                 expected: vec!["up", "./my_contract", "-y"],
             },
             Case {
-                name: "full_with_explicit_url",
                 params: DeployContractParams {
                     path: "./my_contract".to_owned(),
                     constructor: Some("new".to_owned()),
@@ -155,7 +152,6 @@ mod tests {
                 ],
             },
             Case {
-                name: "stored_url_fallback",
                 params: DeployContractParams {
                     path: "./my_contract".to_owned(),
                     constructor: None,
@@ -172,7 +168,7 @@ mod tests {
 
         for case in cases {
             let args = build_deploy_contract_args(&case.params, case.stored_url);
-            assert_eq!(args, case.expected, "case {}", case.name);
+            assert_eq!(args, case.expected);
         }
     }
 }

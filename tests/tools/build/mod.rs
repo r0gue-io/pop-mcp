@@ -1,1 +1,2 @@
+mod chain;
 mod contract;

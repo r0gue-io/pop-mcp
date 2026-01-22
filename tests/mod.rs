@@ -23,12 +23,18 @@ mod common {
     use rmcp::model::{CallToolResult, RawContent};
     use std::net::{TcpStream, ToSocketAddrs};
     use std::path::{Path, PathBuf};
-    use std::sync::{Mutex, OnceLock};
+    use std::process::Command;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Mutex, OnceLock,
+    };
     use std::time::{Duration, Instant};
     use tempfile::TempDir;
 
     /// Default signer URI for test transactions.
     pub(crate) const DEFAULT_SURI: &str = "//Alice";
+
+    static SHARED_NODE_STATE: OnceLock<SharedNodeState> = OnceLock::new();
 
     pub(crate) fn is_error(result: &CallToolResult) -> bool {
         result.is_error == Some(true)
@@ -116,8 +122,12 @@ mod common {
                 return Err(anyhow!(msg));
             }
 
+            let output = texts(&result).join("\n");
             let url = extract_text(&result)
                 .ok_or_else(|| anyhow!("Failed to extract URL from ink-node output"))?;
+            let pids = parse_pids(&output).context("Failed to parse ink-node PIDs")?;
+
+            let _ = SHARED_NODE_STATE.get_or_init(|| SharedNodeState::new(pids));
 
             // Wait for node to be ready
             wait_for_port("127.0.0.1", Self::PORT, Duration::from_secs(30))
@@ -125,6 +135,12 @@ mod common {
 
             URL.set(url).ok();
             Ok(URL.get().unwrap().as_str())
+        }
+
+        pub(crate) fn ensure() -> Result<(&'static str, SharedNodeGuard)> {
+            let url = Self::start_or_get_url()?;
+            let guard = SharedNodeGuard::new()?;
+            Ok((url, guard))
         }
     }
 
@@ -199,8 +215,7 @@ mod common {
         }
 
         /// Deploy to shared ink-node.
-        pub(crate) fn deploy(&mut self, constructor: &str, args: &str) -> Result<()> {
-            let url = InkNode::start_or_get_url()?;
+        pub(crate) fn deploy(&mut self, url: &str, constructor: &str, args: &str) -> Result<()> {
             let executor = PopExecutor::new();
 
             let result = deploy_contract(
@@ -346,6 +361,50 @@ mod common {
         }
 
         Err(anyhow!("No pids found in output"))
+    }
+
+    struct SharedNodeState {
+        users: AtomicUsize,
+        pids: Vec<u32>,
+    }
+
+    impl SharedNodeState {
+        fn new(pids: Vec<u32>) -> Self {
+            Self {
+                users: AtomicUsize::new(0),
+                pids,
+            }
+        }
+
+        fn remove_user_and_cleanup(&self) {
+            if self.users.fetch_sub(1, Ordering::SeqCst) != 1 {
+                return;
+            }
+
+            for pid in &self.pids {
+                let _ = Command::new("kill").arg("-9").arg(pid.to_string()).status();
+            }
+        }
+    }
+
+    pub(crate) struct SharedNodeGuard {
+        state: &'static SharedNodeState,
+    }
+
+    impl SharedNodeGuard {
+        fn new() -> Result<Self> {
+            let state = SHARED_NODE_STATE
+                .get()
+                .ok_or_else(|| anyhow!("Shared node state not initialized"))?;
+            state.users.fetch_add(1, Ordering::SeqCst);
+            Ok(Self { state })
+        }
+    }
+
+    impl Drop for SharedNodeGuard {
+        fn drop(&mut self) {
+            self.state.remove_user_and_cleanup();
+        }
     }
 }
 

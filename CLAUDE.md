@@ -35,6 +35,7 @@ cargo test --features pop-e2e             # Integration tests
 - `snake_case` files/functions, `PascalCase` types
 - `anyhow::Context` on fallible paths
 - No panics in tool code
+- Use "chain" not "parachain" (except in template names like `r0gue-io/base-parachain`)
 
 ### Testing
 - Unit tests inline with `#[cfg(test)]`

@@ -25,6 +25,7 @@ pub use install::{
     check_pop_installation, install_pop_instructions, CheckPopInstallationParams,
     InstallPopInstructionsParams,
 };
+pub use new::chain::{create_chain, CreateChainParams};
 pub use new::contract::{create_contract, CreateContractParams};
 pub use test::contract::{test_contract, TestContractParams};
 pub use up::chain::{up_ink_node, UpInkNodeParams};

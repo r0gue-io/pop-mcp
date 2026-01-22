@@ -82,6 +82,17 @@ impl PopMcpServer {
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
+    #[tool(
+        description = "Create a new Polkadot Chain project from a template scaffold. Providers: pop, openzeppelin, parity. Templates: r0gue-io/base-parachain, r0gue-io/assets-parachain, r0gue-io/contracts-parachain (pop), openzeppelin/generic-template, openzeppelin/evm-template (openzeppelin), paritytech/polkadot-sdk-parachain-template (parity)"
+    )]
+    async fn create_chain(
+        &self,
+        Parameters(params): Parameters<CreateChainParams>,
+    ) -> Result<CallToolResult, McpError> {
+        create_chain(&self.executor, params)
+            .map_err(|e| McpError::internal_error(e.to_string(), None))
+    }
+
     // Frontend-assisted contract creation temporarily disabled.
     /*
     #[tool(

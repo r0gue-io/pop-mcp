@@ -24,6 +24,7 @@ fn deploy_contract_nonexistent_path_fails() -> Result<()> {
 #[test]
 fn deploy_contract_succeeds_and_returns_address() -> Result<()> {
     let env = TestEnv::new()?;
+    let (url, _guard) = InkNode::ensure()?;
     let contract = Contract::create_build_or_use()?;
 
     let result = deploy_contract(
@@ -35,7 +36,7 @@ fn deploy_contract_succeeds_and_returns_address() -> Result<()> {
             value: None,
             execute: Some(true),
             suri: Some(DEFAULT_SURI.to_string()),
-            url: Some(InkNode::start_or_get_url()?.to_string()),
+            url: Some(url.to_string()),
         },
         None,
     )?;

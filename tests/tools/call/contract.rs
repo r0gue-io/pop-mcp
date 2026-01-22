@@ -25,10 +25,11 @@ fn call_contract_nonexistent_path_fails() -> Result<()> {
 #[test]
 fn call_contract_get_and_flip_mutates_state() -> Result<()> {
     let env = TestEnv::new()?;
+    let (url, _guard) = InkNode::ensure()?;
     let mut contract = Contract::create_build_or_use()?;
-    contract.deploy("new", "false")?;
+    contract.deploy(url, "new", "false")?;
 
-    let url = InkNode::start_or_get_url()?.to_string();
+    let url = url.to_string();
     let addr = contract.address().to_string();
     let path = contract.path.display().to_string();
 

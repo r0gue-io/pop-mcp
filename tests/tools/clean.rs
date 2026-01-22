@@ -15,7 +15,7 @@ const TEST_ETH_PORT: u16 = 8547;
 fn up_ink_node_and_clean_nodes_lifecycle() -> Result<()> {
     // Ensure shared node is ready first to avoid concurrent Pop CLI node bootstrapping.
     // Pop CLI cannot handle multiple simultaneous `pop up ink-node` invocations.
-    InkNode::start_or_get_url()?;
+    let (_url, _guard) = InkNode::ensure()?;
 
     let env = TestEnv::new()?;
 

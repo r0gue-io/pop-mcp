@@ -135,6 +135,15 @@ impl PopMcpServer {
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
+    #[tool(description = "Run tests for a chain project")]
+    async fn test_chain(
+        &self,
+        Parameters(params): Parameters<TestChainParams>,
+    ) -> Result<CallToolResult, McpError> {
+        test_chain(&self.executor, params)
+            .map_err(|e| McpError::internal_error(e.to_string(), None))
+    }
+
     #[tool(description = "Deploy and instantiate an ink! smart contract to a network")]
     async fn deploy_contract(
         &self,

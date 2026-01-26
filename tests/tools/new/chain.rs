@@ -1,4 +1,4 @@
-use crate::common::{is_error, is_success, text, texts, TestEnv};
+use crate::common::{is_error, is_success, text, TestEnv};
 use anyhow::Result;
 use pop_mcp_server::tools::new::chain::{create_chain, CreateChainParams};
 
@@ -18,7 +18,7 @@ fn create_chain_pop_standard_template_creates_files() -> Result<()> {
     };
 
     let result = create_chain(env.executor(), params)?;
-    assert!(is_success(&result), "{}", texts(&result).join("\n"));
+    assert!(is_success(&result));
 
     let output = text(&result)?;
     assert!(output.contains("Successfully created chain project:"));

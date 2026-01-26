@@ -15,8 +15,8 @@ pub struct BuildChainParams {
     /// Path to the chain project directory.
     #[schemars(description = "Path to the chain project directory")]
     pub path: String,
-    /// Whether to build in release mode (default: true).
-    #[schemars(description = "Build in release mode with optimizations (default: true)")]
+    /// Whether to build in release mode (default: false).
+    #[schemars(description = "Build in release mode with optimizations (default: false)")]
     pub release: Option<bool>,
 }
 
@@ -34,8 +34,8 @@ impl BuildChainParams {
 fn build_build_chain_args(params: &BuildChainParams) -> Vec<&str> {
     let mut args = vec!["build", "--path", params.path.as_str()];
 
-    // Default to release mode for chains (production builds)
-    if params.release.unwrap_or(true) {
+    // Default to debug mode for chains
+    if params.release.unwrap_or(false) {
         args.push("--release");
     }
 
@@ -82,13 +82,13 @@ mod tests {
     }
 
     #[test]
-    fn build_args_defaults_to_release() {
+    fn build_args_defaults_to_debug() {
         let params = BuildChainParams {
             path: "./my_chain".to_owned(),
             release: None,
         };
         let args = build_build_chain_args(&params);
-        assert_eq!(args, vec!["build", "--path", "./my_chain", "--release"]);
+        assert_eq!(args, vec!["build", "--path", "./my_chain"]);
     }
 
     #[test]

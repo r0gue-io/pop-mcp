@@ -3,13 +3,11 @@
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::*,
-    service::RequestContext,
-    tool, tool_handler, tool_router, ErrorData as McpError, RoleServer, ServerHandler,
+    tool, tool_handler, tool_router, ErrorData as McpError, ServerHandler,
 };
 use std::sync::{Arc, Mutex};
 
 use crate::executor::PopExecutor;
-use crate::resources::SearchDocumentationParams;
 use crate::tools::{common, *};
 
 /// Pop MCP Server - provides tools for Polkadot ink! smart contract development
@@ -164,6 +162,17 @@ impl PopMcpServer {
     }
 
     #[tool(
+        description = "Interact with a chain runtime: execute transactions, query storage, or read constants. Use metadata=true to discover pallets/extrinsics/storage/constants."
+    )]
+    async fn call_chain(
+        &self,
+        Parameters(params): Parameters<CallChainParams>,
+    ) -> Result<CallToolResult, McpError> {
+        call_chain(&self.executor, params)
+            .map_err(|e| McpError::internal_error(e.to_string(), None))
+    }
+
+    #[tool(
         description = "Launch a local ink! node for contract development and testing (runs in background)"
     )]
     async fn up_ink_node(
@@ -211,15 +220,6 @@ impl PopMcpServer {
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
-    #[tool(
-        description = "Search through all Polkadot documentation for specific topics or keywords"
-    )]
-    async fn search_documentation(
-        &self,
-        Parameters(params): Parameters<SearchDocumentationParams>,
-    ) -> Result<CallToolResult, McpError> {
-        crate::resources::search_documentation(params).await
-    }
 }
 
 #[tool_handler]
@@ -229,7 +229,6 @@ impl ServerHandler for PopMcpServer {
             protocol_version: ProtocolVersion::V_2024_11_05,
             capabilities: ServerCapabilities::builder()
                 .enable_tools()
-                .enable_resources()
                 .build(),
             server_info: Implementation::from_build_env(),
             instructions: Some(
@@ -239,33 +238,6 @@ impl ServerHandler for PopMcpServer {
         }
     }
 
-    async fn initialize(
-        &self,
-        _request: InitializeRequestParam,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<InitializeResult, McpError> {
-        Ok(self.get_info())
-    }
-
-    async fn list_resources(
-        &self,
-        _request: Option<PaginatedRequestParam>,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<ListResourcesResult, McpError> {
-        crate::resources::list_resources()
-            .await
-            .map_err(|e| McpError::internal_error(e.to_string(), None))
-    }
-
-    async fn read_resource(
-        &self,
-        request: ReadResourceRequestParam,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<ReadResourceResult, McpError> {
-        crate::resources::read_resource(&request.uri)
-            .await
-            .map_err(|e| McpError::resource_not_found(e.to_string(), None))
-    }
 }
 
 #[cfg(test)]
@@ -283,7 +255,6 @@ mod tests {
 
         // Verify capabilities
         assert!(info.capabilities.tools.is_some());
-        assert!(info.capabilities.resources.is_some());
 
         // Verify instructions
         assert!(info

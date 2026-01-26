@@ -4,7 +4,6 @@
 //! with Pop CLI, enabling AI assistants to help with smart contract development.
 pub mod error;
 pub mod executor;
-pub mod resources;
 pub mod server;
 pub mod tools;
 

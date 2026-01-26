@@ -219,7 +219,6 @@ impl PopMcpServer {
         convert_address(&self.executor, params)
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
-
 }
 
 #[tool_handler]
@@ -237,7 +236,6 @@ impl ServerHandler for PopMcpServer {
             ),
         }
     }
-
 }
 
 #[cfg(test)]

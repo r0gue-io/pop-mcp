@@ -35,11 +35,13 @@ cargo test --features pop-e2e             # Integration tests
 - `snake_case` files/functions, `PascalCase` types
 - `anyhow::Context` on fallible paths
 - No panics in tool code
+- Use "chain" not "parachain" (except in template names like `r0gue-io/base-parachain`)
 
 ### Testing
 - Unit tests inline with `#[cfg(test)]`
 - Integration tests in `tests/tools/`
 - Descriptive test names: `build_contract_rejects_missing_path`
+- Plain asserts only: `assert!(x)` not `assert!(x, "msg")` - test names should be descriptive enough
 
 ### Commits
 - Conventional prefixes: `fix:`, `feat:`, `refactor:`

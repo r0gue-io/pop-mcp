@@ -18,7 +18,7 @@ fn create_chain_pop_standard_template_creates_files() -> Result<()> {
     };
 
     let result = create_chain(env.executor(), params)?;
-    assert!(is_success(&result), "Expected success, got: {:?}", result);
+    assert!(is_success(&result));
 
     let output = text(&result)?;
     assert!(output.contains("Successfully created chain project:"));

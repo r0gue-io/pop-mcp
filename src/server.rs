@@ -117,6 +117,15 @@ impl PopMcpServer {
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 
+    #[tool(description = "Build a chain project using Pop CLI")]
+    async fn build_chain(
+        &self,
+        Parameters(params): Parameters<BuildChainParams>,
+    ) -> Result<CallToolResult, McpError> {
+        build_chain(&self.executor, params)
+            .map_err(|e| McpError::internal_error(e.to_string(), None))
+    }
+
     #[tool(description = "Run tests for an ink! smart contract")]
     async fn test_contract(
         &self,
@@ -215,7 +224,7 @@ impl ServerHandler for PopMcpServer {
                 .build(),
             server_info: Implementation::from_build_env(),
             instructions: Some(
-                "Pop CLI MCP Server - Tools for Polkadot ink! smart contract and parachain development using Pop CLI"
+                "Pop CLI MCP Server - Tools for Polkadot ink! smart contract and chain development using Pop CLI"
                     .to_owned(),
             ),
         }

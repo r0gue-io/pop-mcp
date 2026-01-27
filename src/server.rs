@@ -3,11 +3,13 @@
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::*,
+    service::{RequestContext, RoleServer},
     tool, tool_handler, tool_router, ErrorData as McpError, ServerHandler,
 };
 use std::sync::{Arc, Mutex};
 
 use crate::executor::PopExecutor;
+use crate::resources;
 use crate::tools::{common, *};
 
 /// Pop MCP Server - provides tools for Polkadot ink! smart contract development
@@ -228,6 +230,7 @@ impl ServerHandler for PopMcpServer {
             protocol_version: ProtocolVersion::V_2024_11_05,
             capabilities: ServerCapabilities::builder()
                 .enable_tools()
+                .enable_resources()
                 .build(),
             server_info: Implementation::from_build_env(),
             instructions: Some(
@@ -235,6 +238,33 @@ impl ServerHandler for PopMcpServer {
                     .to_owned(),
             ),
         }
+    }
+
+    fn list_resources(
+        &self,
+        _request: Option<PaginatedRequestParam>,
+        _context: RequestContext<RoleServer>,
+    ) -> impl std::future::Future<Output = Result<ListResourcesResult, McpError>> + Send + '_ {
+        std::future::ready(Ok(ListResourcesResult {
+            resources: resources::list_resources(),
+            next_cursor: None,
+        }))
+    }
+
+    fn read_resource(
+        &self,
+        request: ReadResourceRequestParam,
+        _context: RequestContext<RoleServer>,
+    ) -> impl std::future::Future<Output = Result<ReadResourceResult, McpError>> + Send + '_ {
+        std::future::ready(match resources::read_resource(&request.uri) {
+            Some(contents) => Ok(ReadResourceResult {
+                contents: vec![contents],
+            }),
+            None => Err(McpError::resource_not_found(
+                format!("Resource not found: {}", request.uri),
+                None,
+            )),
+        })
     }
 }
 
@@ -253,6 +283,7 @@ mod tests {
 
         // Verify capabilities
         assert!(info.capabilities.tools.is_some());
+        assert!(info.capabilities.resources.is_some());
 
         // Verify instructions
         assert!(info

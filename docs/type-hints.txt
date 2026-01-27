@@ -1,0 +1,5 @@
+MultiAddress: Wrap SS58 address in Id(), e.g., Id(5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY).
+Option<T>: Pass value directly for Some, omit argument for None.
+Vec<T>: Pass as array of values.
+Balance: Use string with full precision (e.g., "1000000000000" for 1 unit with 12 decimals).
+Dev accounts: //Alice, //Bob, //Charlie, //Dave, //Eve (use with --suri).

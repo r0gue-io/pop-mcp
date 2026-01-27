@@ -8,6 +8,20 @@ use crate::error::{PopMcpError, PopMcpResult};
 use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
+/// Type hints for formatting arguments in chain calls.
+const TYPE_HINTS: &str = r#"
+
+━━━ Type Hints ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MultiAddress: Wrap SS58 address in Id(), e.g., Id(5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
+Option<T>: Pass value directly for Some, omit argument for None
+Vec<u8>/[u8]: Pass as string (auto-converted to hex), e.g., "hello" becomes 0x68656c6c6f
+Vec<AccountId32>: KNOWN BUG - currently broken in pop-cli. Avoid if possible.
+Balance: Use string with full precision (e.g., "1000000000000" for 1 unit with 12 decimals)
+Dev accounts: //Alice, //Bob, //Charlie, //Dave, //Eve (use with suri)
+Dev accounts (SS58): //Alice=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY, //Bob=5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty
+"#;
+
 /// Parameters for the call_chain tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[schemars(extend("properties" = {}))]
@@ -171,13 +185,16 @@ pub fn call_chain(executor: &PopExecutor, params: CallChainParams) -> PopMcpResu
 
             if is_error {
                 Ok(error_result(format!("Chain call failed:\n\n{}", output)))
+            } else if metadata_mode {
+                Ok(success_result(format!(
+                    "Chain metadata\n\n{}{}",
+                    output, TYPE_HINTS
+                )))
             } else {
-                let prefix = if metadata_mode {
-                    "Chain metadata"
-                } else {
-                    "Chain call successful!"
-                };
-                Ok(success_result(format!("{}\n\n{}", prefix, output)))
+                Ok(success_result(format!(
+                    "Chain call successful!\n\n{}",
+                    output
+                )))
             }
         }
         Err(e) => Ok(error_result(format!("Chain call failed: {}", e))),

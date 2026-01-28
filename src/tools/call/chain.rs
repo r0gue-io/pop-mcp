@@ -8,19 +8,8 @@ use crate::error::{PopMcpError, PopMcpResult};
 use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
-/// Type hints for formatting arguments in chain calls.
-const TYPE_HINTS: &str = r#"
-
-━━━ Type Hints ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-MultiAddress: Wrap SS58 address in Id(), e.g., Id(5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY)
-Option<T>: Pass value directly for Some, omit argument for None
-Vec<u8>/[u8]: Pass as string (auto-converted to hex), e.g., "hello" becomes 0x68656c6c6f
-Vec<AccountId32>: KNOWN BUG - currently broken in pop-cli. Avoid if possible.
-Balance: Use string with full precision (e.g., "1000000000000" for 1 unit with 12 decimals)
-Dev accounts: //Alice, //Bob, //Charlie, //Dave, //Eve (use with suri)
-Dev accounts (SS58): //Alice=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY, //Bob=5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty
-"#;
+/// Type hints for formatting arguments in chain calls (single source of truth).
+const TYPE_HINTS: &str = include_str!("../../../docs/type-hints.txt");
 
 /// Parameters for the call_chain tool.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
@@ -156,7 +145,6 @@ fn is_error_output(output: &str) -> bool {
         "Failed to",
         "failed to",
         "Unable to",
-        "Pallet with name",    // "Pallet with name X not found"
         "not found in pallet", // "Call with name X not found in pallet Y"
     ];
     error_indicators
@@ -178,7 +166,7 @@ pub fn call_chain(executor: &PopExecutor, params: CallChainParams) -> PopMcpResu
             // In metadata mode, check for specific pallet not found error
             // In call mode, check for general error indicators
             let is_error = if metadata_mode {
-                output.contains("Pallet with name") && output.contains("not found")
+                output.contains("Failed to find the pallet")
             } else {
                 is_error_output(&output)
             };

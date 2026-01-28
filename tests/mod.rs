@@ -25,7 +25,6 @@ mod common {
     use rmcp::model::{CallToolResult, RawContent};
     use std::net::{TcpStream, ToSocketAddrs};
     use std::path::{Path, PathBuf};
-    use std::process::Command;
     use std::sync::{
         atomic::{AtomicUsize, Ordering},
         Mutex, OnceLock,
@@ -124,12 +123,15 @@ mod common {
                 return Err(anyhow!(msg));
             }
 
-            let output = texts(&result).join("\n");
             let url = extract_text(&result)
                 .ok_or_else(|| anyhow!("Failed to extract URL from ink-node output"))?;
-            let pids = parse_pids(&output).context("Failed to parse ink-node PIDs")?;
 
-            let _ = SHARED_NODE_STATE.get_or_init(|| SharedNodeState::new(pids));
+            // Validate URL is not empty and looks like a websocket URL
+            if url.is_empty() || !url.starts_with("ws://") {
+                return Err(anyhow!("Invalid URL from ink-node: '{}'", url));
+            }
+
+            let _ = SHARED_NODE_STATE.get_or_init(SharedNodeState::new);
 
             // Wait for node to be ready
             wait_for_port("127.0.0.1", Self::PORT, Duration::from_secs(30))
@@ -547,25 +549,22 @@ mod common {
 
     struct SharedNodeState {
         users: AtomicUsize,
-        pids: Vec<u32>,
     }
 
     impl SharedNodeState {
-        fn new(pids: Vec<u32>) -> Self {
+        fn new() -> Self {
             Self {
                 users: AtomicUsize::new(0),
-                pids,
             }
         }
 
-        fn remove_user_and_cleanup(&self) {
-            if self.users.fetch_sub(1, Ordering::SeqCst) != 1 {
-                return;
-            }
-
-            for pid in &self.pids {
-                let _ = Command::new("kill").arg("-9").arg(pid.to_string()).status();
-            }
+        fn remove_user(&self) {
+            // Just decrement the counter. Don't kill the node.
+            // There's a race condition between start_or_get_url() returning and
+            // SharedNodeGuard::new() incrementing the counter. During this window,
+            // another test's guard drop could kill the node prematurely.
+            // CI will clean up the node when the job ends.
+            self.users.fetch_sub(1, Ordering::SeqCst);
         }
     }
 
@@ -585,7 +584,7 @@ mod common {
 
     impl Drop for SharedNodeGuard {
         fn drop(&mut self) {
-            self.state.remove_user_and_cleanup();
+            self.state.remove_user();
         }
     }
 }

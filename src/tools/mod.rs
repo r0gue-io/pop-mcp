@@ -28,6 +28,7 @@ pub use install::{
 };
 pub use new::chain::{create_chain, CreateChainParams};
 pub use new::contract::{create_contract, CreateContractParams};
+pub use test::chain::{test_chain, TestChainParams};
 pub use test::contract::{test_contract, TestContractParams};
 pub use up::chain::{up_ink_node, UpInkNodeParams};
 pub use up::contract::{deploy_contract, DeployContractParams};

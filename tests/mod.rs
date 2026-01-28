@@ -15,10 +15,10 @@ mod common {
 
     use anyhow::{anyhow, Context, Result};
     use pop_mcp_server::executor::PopExecutor;
-    use pop_mcp_server::tools::build::chain::{build_chain, BuildChainParams};
+    // use pop_mcp_server::tools::build::chain::{build_chain, BuildChainParams};
     use pop_mcp_server::tools::build::contract::{build_contract, BuildContractParams};
     use pop_mcp_server::tools::common::extract_text;
-    use pop_mcp_server::tools::new::chain::{create_chain, CreateChainParams};
+    // use pop_mcp_server::tools::new::chain::{create_chain, CreateChainParams};
     use pop_mcp_server::tools::new::contract::{create_contract, CreateContractParams};
     use pop_mcp_server::tools::up::chain::{up_ink_node, UpInkNodeParams};
     use pop_mcp_server::tools::up::contract::{deploy_contract, DeployContractParams};
@@ -150,11 +150,30 @@ mod common {
     static SHARED_CONTRACT_DIR: OnceLock<TempDir> = OnceLock::new();
     static SHARED_CONTRACT_INIT: Mutex<()> = Mutex::new(());
 
-    const SHARED_CHAIN_NAME: &str = "shared_chain";
-    static SHARED_CHAIN_DIR: OnceLock<TempDir> = OnceLock::new();
-    static SHARED_CHAIN_INIT: Mutex<()> = Mutex::new(());
+    // const SHARED_CHAIN_NAME: &str = "shared_chain";
+    // static SHARED_CHAIN_DIR: OnceLock<TempDir> = OnceLock::new();
+    // static SHARED_CHAIN_INIT: Mutex<()> = Mutex::new(());
 
     fn shared_contract_path() -> Result<PathBuf> {
+        // Check for override path first
+        if let Ok(path) = std::env::var("POP_E2E_SHARED_CONTRACT_PATH") {
+            let path = PathBuf::from(path);
+            if !path.join("Cargo.toml").exists() {
+                return Err(anyhow!(
+                    "Shared contract override missing Cargo.toml: {}",
+                    path.display()
+                ));
+            }
+            if !path.join("lib.rs").exists() {
+                return Err(anyhow!(
+                    "Shared contract override missing lib.rs: {}",
+                    path.display()
+                ));
+            }
+            return Ok(path);
+        }
+
+        // Fast path: already initialized
         if let Some(dir) = SHARED_CONTRACT_DIR.get() {
             return Ok(dir.path().join(SHARED_CONTRACT_NAME));
         }
@@ -186,20 +205,51 @@ mod common {
 
         let path = tempdir.path().join(SHARED_CONTRACT_NAME);
 
-        let build_result = build_contract(
-            &executor,
-            BuildContractParams {
-                path: path.display().to_string(),
-                release: None,
-            },
-        )
-        .context("Failed to build shared contract")?;
-
-        if is_error(&build_result) {
+        // Verify creation artifacts
+        if !path.join("Cargo.toml").exists() {
             return Err(anyhow!(
-                "Shared contract build failed: {}",
-                text(&build_result)?
+                "Shared contract creation failed: missing Cargo.toml"
             ));
+        }
+        if !path.join("lib.rs").exists() {
+            return Err(anyhow!("Shared contract creation failed: missing lib.rs"));
+        }
+
+        // Determine release mode from env var
+        let release = match std::env::var("POP_E2E_SHARED_CONTRACT_RELEASE") {
+            Ok(val) if val == "0" => Some(false),
+            Ok(val) if val == "1" => Some(true),
+            _ => None,
+        };
+
+        // Build unless skipped
+        if std::env::var("POP_E2E_SHARED_CONTRACT_SKIP_BUILD")
+            .ok()
+            .as_deref()
+            != Some("1")
+        {
+            let build_result = build_contract(
+                &executor,
+                BuildContractParams {
+                    path: path.display().to_string(),
+                    release,
+                },
+            )
+            .context("Failed to build shared contract")?;
+
+            if is_error(&build_result) {
+                return Err(anyhow!(
+                    "Shared contract build failed: {}",
+                    text(&build_result)?
+                ));
+            }
+
+            // Verify build artifacts
+            if !path.join("target/ink").exists() {
+                return Err(anyhow!(
+                    "Shared contract build failed: missing build artifacts in target/ink"
+                ));
+            }
         }
 
         SHARED_CONTRACT_DIR.set(tempdir).ok();
@@ -257,131 +307,131 @@ mod common {
         }
     }
 
-    fn shared_chain_path() -> Result<PathBuf> {
-        // Check for override path first
-        if let Ok(path) = std::env::var("POP_E2E_SHARED_CHAIN_PATH") {
-            let path = PathBuf::from(path);
-            if !path.join("Cargo.toml").exists() {
-                return Err(anyhow!(
-                    "Shared chain override missing Cargo.toml: {}",
-                    path.display()
-                ));
-            }
-            if !path.join("runtime").exists() {
-                return Err(anyhow!(
-                    "Shared chain override missing runtime directory: {}",
-                    path.display()
-                ));
-            }
-            return Ok(path);
-        }
+    // fn shared_chain_path() -> Result<PathBuf> {
+    //     // Check for override path first
+    //     if let Ok(path) = std::env::var("POP_E2E_SHARED_CHAIN_PATH") {
+    //         let path = PathBuf::from(path);
+    //         if !path.join("Cargo.toml").exists() {
+    //             return Err(anyhow!(
+    //                 "Shared chain override missing Cargo.toml: {}",
+    //                 path.display()
+    //             ));
+    //         }
+    //         if !path.join("runtime").exists() {
+    //             return Err(anyhow!(
+    //                 "Shared chain override missing runtime directory: {}",
+    //                 path.display()
+    //             ));
+    //         }
+    //         return Ok(path);
+    //     }
 
-        // Fast path: already initialized
-        if let Some(dir) = SHARED_CHAIN_DIR.get() {
-            return Ok(dir.path().join(SHARED_CHAIN_NAME));
-        }
+    //     // Fast path: already initialized
+    //     if let Some(dir) = SHARED_CHAIN_DIR.get() {
+    //         return Ok(dir.path().join(SHARED_CHAIN_NAME));
+    //     }
 
-        // Double-checked locking for initialization
-        let _guard = SHARED_CHAIN_INIT.lock().unwrap();
-        if let Some(dir) = SHARED_CHAIN_DIR.get() {
-            return Ok(dir.path().join(SHARED_CHAIN_NAME));
-        }
+    //     // Double-checked locking for initialization
+    //     let _guard = SHARED_CHAIN_INIT.lock().unwrap();
+    //     if let Some(dir) = SHARED_CHAIN_DIR.get() {
+    //         return Ok(dir.path().join(SHARED_CHAIN_NAME));
+    //     }
 
-        // Create temp dir and chain project
-        let tempdir = TempDir::new().context("Failed to create temp dir")?;
-        let executor = PopExecutor::with_cwd(tempdir.path().to_path_buf());
+    //     // Create temp dir and chain project
+    //     let tempdir = TempDir::new().context("Failed to create temp dir")?;
+    //     let executor = PopExecutor::with_cwd(tempdir.path().to_path_buf());
 
-        let create_result = create_chain(
-            &executor,
-            CreateChainParams {
-                name: SHARED_CHAIN_NAME.to_string(),
-                provider: "pop".to_string(),
-                template: "r0gue-io/base-parachain".to_string(),
-                symbol: None,
-                decimals: None,
-            },
-        )
-        .context("Failed to create shared chain")?;
+    //     let create_result = create_chain(
+    //         &executor,
+    //         CreateChainParams {
+    //             name: SHARED_CHAIN_NAME.to_string(),
+    //             provider: "pop".to_string(),
+    //             template: "r0gue-io/base-parachain".to_string(),
+    //             symbol: None,
+    //             decimals: None,
+    //         },
+    //     )
+    //     .context("Failed to create shared chain")?;
 
-        if is_error(&create_result) {
-            return Err(anyhow!(
-                "Shared chain creation failed: {}",
-                text(&create_result)?
-            ));
-        }
+    //     if is_error(&create_result) {
+    //         return Err(anyhow!(
+    //             "Shared chain creation failed: {}",
+    //             text(&create_result)?
+    //         ));
+    //     }
 
-        let path = tempdir.path().join(SHARED_CHAIN_NAME);
+    //     let path = tempdir.path().join(SHARED_CHAIN_NAME);
 
-        // Verify creation artifacts
-        if !path.join("Cargo.toml").exists() {
-            return Err(anyhow!("Shared chain creation failed: missing Cargo.toml"));
-        }
-        if !path.join("runtime").exists() {
-            return Err(anyhow!(
-                "Shared chain creation failed: missing runtime directory"
-            ));
-        }
+    //     // Verify creation artifacts
+    //     if !path.join("Cargo.toml").exists() {
+    //         return Err(anyhow!("Shared chain creation failed: missing Cargo.toml"));
+    //     }
+    //     if !path.join("runtime").exists() {
+    //         return Err(anyhow!(
+    //             "Shared chain creation failed: missing runtime directory"
+    //         ));
+    //     }
 
-        // Determine release mode from env var
-        let release = match std::env::var("POP_E2E_SHARED_CHAIN_RELEASE") {
-            Ok(val) if val == "0" => Some(false),
-            Ok(val) if val == "1" => Some(true),
-            _ => None,
-        };
+    //     // Determine release mode from env var
+    //     let release = match std::env::var("POP_E2E_SHARED_CHAIN_RELEASE") {
+    //         Ok(val) if val == "0" => Some(false),
+    //         Ok(val) if val == "1" => Some(true),
+    //         _ => None,
+    //     };
 
-        // Build unless skipped
-        if std::env::var("POP_E2E_SHARED_CHAIN_SKIP_BUILD")
-            .ok()
-            .as_deref()
-            != Some("1")
-        {
-            let build_result = build_chain(
-                &executor,
-                BuildChainParams {
-                    path: path.display().to_string(),
-                    release,
-                },
-            )
-            .context("Failed to build shared chain")?;
+    //     // Build unless skipped
+    //     if std::env::var("POP_E2E_SHARED_CHAIN_SKIP_BUILD")
+    //         .ok()
+    //         .as_deref()
+    //         != Some("1")
+    //     {
+    //         let build_result = build_chain(
+    //             &executor,
+    //             BuildChainParams {
+    //                 path: path.display().to_string(),
+    //                 release,
+    //             },
+    //         )
+    //         .context("Failed to build shared chain")?;
 
-            if is_error(&build_result) {
-                return Err(anyhow!(
-                    "Shared chain build failed: {}",
-                    text(&build_result)?
-                ));
-            }
+    //         if is_error(&build_result) {
+    //             return Err(anyhow!(
+    //                 "Shared chain build failed: {}",
+    //                 text(&build_result)?
+    //             ));
+    //         }
 
-            // Verify build artifacts
-            let release_enabled = release.unwrap_or(true);
-            let build_dir = if release_enabled {
-                "target/release"
-            } else {
-                "target/debug"
-            };
-            if !path.join(build_dir).exists() {
-                return Err(anyhow!(
-                    "Shared chain build failed: missing build artifacts in {}",
-                    build_dir
-                ));
-            }
-        }
+    //         // Verify build artifacts
+    //         let release_enabled = release.unwrap_or(true);
+    //         let build_dir = if release_enabled {
+    //             "target/release"
+    //         } else {
+    //             "target/debug"
+    //         };
+    //         if !path.join(build_dir).exists() {
+    //             return Err(anyhow!(
+    //                 "Shared chain build failed: missing build artifacts in {}",
+    //                 build_dir
+    //             ));
+    //         }
+    //     }
 
-        SHARED_CHAIN_DIR.set(tempdir).ok();
-        Ok(path)
-    }
+    //     SHARED_CHAIN_DIR.set(tempdir).ok();
+    //     Ok(path)
+    // }
 
-    pub(crate) struct ChainProject {
-        pub(crate) path: PathBuf,
-    }
+    // pub(crate) struct Chain {
+    //     pub(crate) path: PathBuf,
+    // }
 
-    impl ChainProject {
-        /// Create, build, or reuse the shared chain project for testing.
-        pub(crate) fn create_build_or_use() -> Result<Self> {
-            Ok(ChainProject {
-                path: shared_chain_path()?,
-            })
-        }
-    }
+    // impl Chain {
+    //     /// Create, build, or reuse the shared chain project for testing.
+    //     pub(crate) fn create_build_or_use() -> Result<Self> {
+    //         Ok(Chain {
+    //             path: shared_chain_path()?,
+    //         })
+    //     }
+    // }
 
     /// Parse contract address from deployment output.
     fn parse_contract_address(output: &str) -> Option<String> {

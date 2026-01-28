@@ -209,6 +209,7 @@ mod common {
             CreateContractParams {
                 name: SHARED_CONTRACT_NAME.to_string(),
                 template: "standard".to_string(),
+                with_frontend: None,
             },
         )
         .context("Failed to create shared contract")?;

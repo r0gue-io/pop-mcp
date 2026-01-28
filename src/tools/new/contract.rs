@@ -43,6 +43,9 @@ pub struct CreateContractParams {
         description = "Template to use (standard, erc20, erc721, erc1155, dns, cross-contract-calls, multisig)"
     )]
     pub template: String,
+    /// Whether to scaffold a frontend using the typink template.
+    #[schemars(description = "Scaffold a typink frontend alongside the contract")]
+    pub with_frontend: Option<bool>,
 }
 
 impl CreateContractParams {
@@ -62,14 +65,18 @@ impl CreateContractParams {
 }
 
 /// Build command arguments for create_contract
-fn build_create_contract_args(params: &CreateContractParams) -> [&str; 5] {
-    [
+fn build_create_contract_args(params: &CreateContractParams) -> Vec<&str> {
+    let mut args = vec![
         "new",
         "contract",
         params.name.as_str(),
         "--template",
         params.template.as_str(),
-    ]
+    ];
+    if params.with_frontend == Some(true) {
+        args.push("--with-frontend=typink");
+    }
+    args
 }
 
 /// Execute create_contract tool
@@ -273,6 +280,7 @@ mod tests {
             let params = CreateContractParams {
                 name: (*name).to_owned(),
                 template: "standard".to_owned(),
+                with_frontend: None,
             };
             assert!(params.validate().is_ok());
         }
@@ -286,6 +294,7 @@ mod tests {
             let params = CreateContractParams {
                 name: (*name).to_owned(),
                 template: "standard".to_owned(),
+                with_frontend: None,
             };
             assert!(params.validate().is_err());
         }
@@ -296,11 +305,47 @@ mod tests {
         let params = CreateContractParams {
             name: "my_contract".to_owned(),
             template: "erc20".to_owned(),
+            with_frontend: None,
         };
         let args = build_create_contract_args(&params);
         assert_eq!(
             args,
-            ["new", "contract", "my_contract", "--template", "erc20"]
+            vec!["new", "contract", "my_contract", "--template", "erc20"]
+        );
+    }
+
+    #[test]
+    fn build_args_include_frontend_when_true() {
+        let params = CreateContractParams {
+            name: "my_contract".to_owned(),
+            template: "standard".to_owned(),
+            with_frontend: Some(true),
+        };
+        let args = build_create_contract_args(&params);
+        assert_eq!(
+            args,
+            vec![
+                "new",
+                "contract",
+                "my_contract",
+                "--template",
+                "standard",
+                "--with-frontend=typink"
+            ]
+        );
+    }
+
+    #[test]
+    fn build_args_exclude_frontend_when_false() {
+        let params = CreateContractParams {
+            name: "my_contract".to_owned(),
+            template: "standard".to_owned(),
+            with_frontend: Some(false),
+        };
+        let args = build_create_contract_args(&params);
+        assert_eq!(
+            args,
+            vec!["new", "contract", "my_contract", "--template", "standard"]
         );
     }
 

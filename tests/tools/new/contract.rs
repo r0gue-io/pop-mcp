@@ -12,6 +12,7 @@ fn create_contract_standard_template_creates_files() -> Result<()> {
     let params = CreateContractParams {
         name: contract_name.to_string(),
         template: "standard".to_string(),
+        with_frontend: None,
     };
 
     let result = create_contract(env.executor(), params)?;
@@ -31,6 +32,7 @@ fn create_contract_invalid_name_with_hyphen_fails_validation() -> Result<()> {
     let params = CreateContractParams {
         name: "invalid-name".to_string(),
         template: "standard".to_string(),
+        with_frontend: None,
     };
     let result = create_contract(env.executor(), params);
     assert!(result.is_err());
@@ -43,9 +45,29 @@ fn create_contract_nonexistent_template_fails() -> Result<()> {
     let params = CreateContractParams {
         name: "test_contract".to_string(),
         template: "non_existing".to_string(),
+        with_frontend: None,
     };
     let result = create_contract(env.executor(), params)?;
     assert!(is_error(&result));
     assert!(text(&result)?.starts_with("Failed to create contract:"));
+    Ok(())
+}
+
+#[test]
+fn create_contract_with_frontend_creates_frontend_dir() -> Result<()> {
+    let env = TestEnv::new()?;
+
+    let contract_name = "frontend_test";
+    let contract_path = env.workdir().join(contract_name);
+
+    let params = CreateContractParams {
+        name: contract_name.to_string(),
+        template: "standard".to_string(),
+        with_frontend: Some(true),
+    };
+
+    let result = create_contract(env.executor(), params)?;
+    assert!(is_success(&result));
+    assert!(contract_path.join("frontend").exists());
     Ok(())
 }

@@ -10,7 +10,7 @@ fn call_chain_metadata_lists_pallets() -> Result<()> {
     let result = call_chain(
         env.executor(),
         CallChainParams {
-            url: url.to_string(),
+            url: url.clone(),
             pallet: None,
             function: None,
             args: None,
@@ -36,7 +36,7 @@ fn call_chain_metadata_inspects_pallet() -> Result<()> {
     let result = call_chain(
         env.executor(),
         CallChainParams {
-            url: url.to_string(),
+            url: url.clone(),
             pallet: Some("System".to_string()),
             function: None,
             args: None,
@@ -62,7 +62,7 @@ fn call_chain_metadata_invalid_pallet_fails() -> Result<()> {
     let result = call_chain(
         env.executor(),
         CallChainParams {
-            url: url.to_string(),
+            url: url.clone(),
             pallet: Some("NonExistentPallet".to_string()),
             function: None,
             args: None,
@@ -87,7 +87,7 @@ fn call_chain_reads_constant() -> Result<()> {
     let result = call_chain(
         env.executor(),
         CallChainParams {
-            url: url.to_string(),
+            url: url.clone(),
             pallet: Some("Balances".to_string()),
             function: Some("ExistentialDeposit".to_string()),
             args: None,
@@ -113,7 +113,7 @@ fn call_chain_queries_storage() -> Result<()> {
     let result = call_chain(
         env.executor(),
         CallChainParams {
-            url: url.to_string(),
+            url: url.clone(),
             pallet: Some("System".to_string()),
             function: Some("Account".to_string()),
             args: Some(vec![
@@ -141,7 +141,7 @@ fn call_chain_executes_transaction() -> Result<()> {
     let result = call_chain(
         env.executor(),
         CallChainParams {
-            url: url.to_string(),
+            url: url.clone(),
             pallet: Some("System".to_string()),
             function: Some("remark".to_string()),
             args: Some(vec!["0x1234".to_string()]),

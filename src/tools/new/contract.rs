@@ -125,7 +125,7 @@ fn validate_frontend_requirements() -> Result<(), String> {
     if !has_supported_package_manager() {
         return Err(
             "with_frontend requires a package manager (pnpm, bun, yarn, or npm) available on PATH."
-                .to_string(),
+                .to_owned(),
         );
     }
     Ok(())
@@ -137,27 +137,27 @@ fn node_major_version() -> Result<u32, String> {
         .output()
         .map_err(|_| {
             "with_frontend requires Node.js v20+ installed. Install Node.js v20+ and try again."
-                .to_string()
+                .to_owned()
         })?;
 
     if !output.status.success() {
         return Err(
             "with_frontend requires Node.js v20+ installed. Install Node.js v20+ and try again."
-                .to_string(),
+                .to_owned(),
         );
     }
 
     let version = String::from_utf8(output.stdout)
-        .map_err(|_| "Failed to parse Node.js version output.".to_string())?;
+        .map_err(|_| "Failed to parse Node.js version output.".to_owned())?;
     let version = version.trim();
     let version = version.strip_prefix('v').unwrap_or(version);
     let major = version
         .split('.')
         .next()
-        .ok_or_else(|| "Failed to parse Node.js version output.".to_string())?;
+        .ok_or_else(|| "Failed to parse Node.js version output.".to_owned())?;
     major
         .parse::<u32>()
-        .map_err(|_| "Failed to parse Node.js major version.".to_string())
+        .map_err(|_| "Failed to parse Node.js major version.".to_owned())
 }
 
 fn has_supported_package_manager() -> bool {

@@ -84,7 +84,7 @@ fn create_contract_with_frontend_creates_frontend_dir() -> Result<()> {
 }
 
 fn frontend_requirements_met() -> bool {
-    node_major_version().map_or(false, |major| major >= 20) && has_supported_package_manager()
+    node_major_version().is_some_and(|major| major >= 20) && has_supported_package_manager()
 }
 
 fn node_major_version() -> Option<u32> {

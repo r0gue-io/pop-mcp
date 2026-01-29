@@ -45,9 +45,7 @@ pub struct CreateContractParams {
     )]
     pub template: String,
     /// Whether to scaffold a frontend using the typink template.
-    #[schemars(
-        description = "Scaffold a typink frontend alongside the contract (requires Node.js v20+ and a package manager installed)"
-    )]
+    #[schemars(description = "Scaffold a typink frontend alongside the contract")]
     pub with_frontend: Option<bool>,
 }
 

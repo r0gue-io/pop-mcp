@@ -27,9 +27,7 @@ fn call_contract_get_and_flip_mutates_state() -> Result<()> {
     let env = TestEnv::new()?;
     let (url, _guard) = InkNode::ensure()?;
     let mut contract = Contract::create_build_or_use()?;
-    contract.deploy(url, "new", "false")?;
-
-    let url = url.to_string();
+    contract.deploy(&url, "new", "false")?;
     let addr = contract.address().to_string();
     let path = contract.path.display().to_string();
 

@@ -19,6 +19,7 @@ pub mod up;
 
 pub use build::chain::{build_chain, BuildChainParams};
 pub use build::contract::{build_contract, BuildContractParams};
+pub use call::chain::{call_chain, CallChainParams};
 pub use call::contract::{call_contract, CallContractParams};
 pub use clean::{clean_nodes, CleanNodesParams};
 pub use convert::{convert_address, ConvertAddressParams};

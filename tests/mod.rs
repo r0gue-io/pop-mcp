@@ -36,8 +36,6 @@ mod common {
     /// Default signer URI for test transactions.
     pub(crate) const DEFAULT_SURI: &str = "//Alice";
 
-    static SHARED_NODE_STATE: OnceLock<SharedNodeState> = OnceLock::new();
-
     pub(crate) fn is_error(result: &CallToolResult) -> bool {
         result.is_error == Some(true)
     }
@@ -95,20 +93,20 @@ mod common {
         pub(crate) const ETH_PORT: u16 = 8546;
 
         /// Start the shared ink-node if needed and return its URL.
-        pub(crate) fn start_or_get_url() -> Result<&'static str> {
-            static URL: OnceLock<String> = OnceLock::new();
-            static INIT: Mutex<()> = Mutex::new(());
+        /// Uses a Mutex to allow restart if node was killed.
+        fn start_or_get_url() -> Result<String> {
+            let mut node = NODE.lock().unwrap();
 
-            if let Some(url) = URL.get() {
-                return Ok(url.as_str());
+            // Check if we have a node and it's still alive
+            if let Some(ref info) = *node {
+                if is_port_open("127.0.0.1", Self::PORT) {
+                    info.users.fetch_add(1, Ordering::SeqCst);
+                    return Ok(info.url.clone());
+                }
+                // Node is dead, will restart below
             }
 
-            let _guard = INIT.lock().unwrap();
-            if let Some(url) = URL.get() {
-                return Ok(url.as_str());
-            }
-
-            // Start the node
+            // Start (or restart) the node
             let executor = PopExecutor::new();
             let result = up_ink_node(
                 &executor,
@@ -124,27 +122,46 @@ mod common {
                 return Err(anyhow!(msg));
             }
 
-            let output = texts(&result).join("\n");
             let url = extract_text(&result)
                 .ok_or_else(|| anyhow!("Failed to extract URL from ink-node output"))?;
-            let pids = parse_pids(&output).context("Failed to parse ink-node PIDs")?;
 
-            let _ = SHARED_NODE_STATE.get_or_init(|| SharedNodeState::new(pids));
+            if url.is_empty() || !url.starts_with("ws://") {
+                return Err(anyhow!("Invalid URL from ink-node: '{}'", url));
+            }
+
+            let output = texts(&result).join("\n");
+            let pids = parse_pids(&output).context("Failed to parse ink-node PIDs")?;
 
             // Wait for node to be ready
             wait_for_port("127.0.0.1", Self::PORT, Duration::from_secs(30))
                 .context("ink-node not listening on expected port")?;
 
-            URL.set(url).ok();
-            Ok(URL.get().unwrap().as_str())
+            // Create new node info with counter=1 (this caller)
+            let info = NodeInfo {
+                url: url.clone(),
+                users: AtomicUsize::new(1),
+                pids,
+            };
+
+            *node = Some(info);
+            Ok(url)
         }
 
-        pub(crate) fn ensure() -> Result<(&'static str, SharedNodeGuard)> {
+        pub(crate) fn ensure() -> Result<(String, SharedNodeGuard)> {
             let url = Self::start_or_get_url()?;
-            let guard = SharedNodeGuard::new()?;
+            let guard = SharedNodeGuard::new();
             Ok((url, guard))
         }
     }
+
+    struct NodeInfo {
+        url: String,
+        users: AtomicUsize,
+        pids: Vec<u32>,
+    }
+
+    /// Global node mutex - used by both start_or_get_url and cleanup
+    static NODE: Mutex<Option<NodeInfo>> = Mutex::new(None);
 
     const SHARED_CONTRACT_NAME: &str = "shared_contract";
     static SHARED_CONTRACT_DIR: OnceLock<TempDir> = OnceLock::new();
@@ -545,47 +562,30 @@ mod common {
         Err(anyhow!("No pids found in output"))
     }
 
-    struct SharedNodeState {
-        users: AtomicUsize,
-        pids: Vec<u32>,
-    }
-
-    impl SharedNodeState {
-        fn new(pids: Vec<u32>) -> Self {
-            Self {
-                users: AtomicUsize::new(0),
-                pids,
-            }
-        }
-
-        fn remove_user_and_cleanup(&self) {
-            if self.users.fetch_sub(1, Ordering::SeqCst) != 1 {
-                return;
-            }
-
-            for pid in &self.pids {
-                let _ = Command::new("kill").arg("-9").arg(pid.to_string()).status();
-            }
-        }
-    }
-
     pub(crate) struct SharedNodeGuard {
-        state: &'static SharedNodeState,
+        _private: (), // prevent construction outside this module
     }
 
     impl SharedNodeGuard {
-        fn new() -> Result<Self> {
-            let state = SHARED_NODE_STATE
-                .get()
-                .ok_or_else(|| anyhow!("Shared node state not initialized"))?;
-            state.users.fetch_add(1, Ordering::SeqCst);
-            Ok(Self { state })
+        fn new() -> Self {
+            Self { _private: () }
         }
     }
 
     impl Drop for SharedNodeGuard {
         fn drop(&mut self) {
-            self.state.remove_user_and_cleanup();
+            let mut node = NODE.lock().unwrap();
+            if let Some(ref info) = *node {
+                let prev = info.users.fetch_sub(1, Ordering::SeqCst);
+                if prev == 1 {
+                    // Last user - kill the node
+                    for pid in &info.pids {
+                        let _ = Command::new("kill").arg("-9").arg(pid.to_string()).status();
+                    }
+                    // Clear node info so next ensure() restarts
+                    *node = None;
+                }
+            }
         }
     }
 }

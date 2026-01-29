@@ -1,0 +1,7 @@
+MultiAddress: Wrap SS58 address in Id(), e.g., Id(5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY).
+Option<T>: Pass value directly for Some, omit argument for None.
+Vec<u8>/[u8]: Pass as string (auto-converted to hex), e.g., "hello" becomes 0x68656c6c6f.
+Vec<AccountId32>: Use bracket syntax with SS58 addresses, e.g., [5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY] or [addr1, addr2] for multiple.
+Balance: Use string with full precision (e.g., "1000000000000" for 1 unit with 12 decimals).
+Dev accounts: //Alice, //Bob, //Charlie, //Dave, //Eve (use with suri).
+Dev accounts (SS58): //Alice=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY, //Bob=5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.

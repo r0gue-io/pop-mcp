@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "pop-mcp": {
+      "type": "stdio",
+      "command": "/Users/R0GUE/Documents/Code/R0GUE/pop-mcp/target/debug/pop-mcp-server",
+      "args": [],
+      "env": {}
+    }
+  }
+}

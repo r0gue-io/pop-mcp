@@ -3,6 +3,7 @@
 use rmcp::model::CallToolResult;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::process::Command;
 
 use crate::error::PopMcpResult;
 use crate::executor::PopExecutor;
@@ -44,7 +45,9 @@ pub struct CreateContractParams {
     )]
     pub template: String,
     /// Whether to scaffold a frontend using the typink template.
-    #[schemars(description = "Scaffold a typink frontend alongside the contract")]
+    #[schemars(
+        description = "Scaffold a typink frontend alongside the contract (requires Node.js v20+ and a package manager installed)"
+    )]
     pub with_frontend: Option<bool>,
 }
 
@@ -89,15 +92,84 @@ pub fn create_contract(
         .validate()
         .map_err(crate::error::PopMcpError::InvalidInput)?;
 
+    if params.with_frontend == Some(true) {
+        if let Err(message) = validate_frontend_requirements() {
+            return Ok(error_result(message));
+        }
+    }
+
     let args = build_create_contract_args(&params);
 
     match executor.execute(&args) {
-        Ok(_) => Ok(success_result(format!(
-            "Successfully created contract: {}",
-            params.name
-        ))),
+        Ok(_) => {
+            let message = if params.with_frontend == Some(true) {
+                format!(
+                    "Successfully created contract with typink frontend: {}",
+                    params.name
+                )
+            } else {
+                format!("Successfully created contract: {}", params.name)
+            };
+            Ok(success_result(message))
+        }
         Err(e) => Ok(error_result(format!("Failed to create contract: {}", e))),
     }
+}
+
+fn validate_frontend_requirements() -> Result<(), String> {
+    let node_major = node_major_version()?;
+    if node_major < 20 {
+        return Err(format!(
+            "with_frontend requires Node.js v20+ (detected v{}). Install Node.js v20+ and try again.",
+            node_major
+        ));
+    }
+    if !has_supported_package_manager() {
+        return Err(
+            "with_frontend requires a package manager (pnpm, bun, yarn, or npm) available on PATH."
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn node_major_version() -> Result<u32, String> {
+    let output = Command::new("node")
+        .arg("--version")
+        .output()
+        .map_err(|_| {
+            "with_frontend requires Node.js v20+ installed. Install Node.js v20+ and try again."
+                .to_string()
+        })?;
+
+    if !output.status.success() {
+        return Err(
+            "with_frontend requires Node.js v20+ installed. Install Node.js v20+ and try again."
+                .to_string(),
+        );
+    }
+
+    let version = String::from_utf8(output.stdout)
+        .map_err(|_| "Failed to parse Node.js version output.".to_string())?;
+    let version = version.trim();
+    let version = version.strip_prefix('v').unwrap_or(version);
+    let major = version
+        .split('.')
+        .next()
+        .ok_or_else(|| "Failed to parse Node.js version output.".to_string())?;
+    major
+        .parse::<u32>()
+        .map_err(|_| "Failed to parse Node.js major version.".to_string())
+}
+
+fn has_supported_package_manager() -> bool {
+    ["pnpm", "bun", "yarn", "npm"].iter().any(|bin| {
+        Command::new(bin)
+            .arg("--version")
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+    })
 }
 
 // Frontend creation temporarily disabled.

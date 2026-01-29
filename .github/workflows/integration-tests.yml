@@ -73,6 +73,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y protobuf-compiler clang cmake
           protoc --version
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
       - name: Cache pop assets
         uses: actions/cache@v4

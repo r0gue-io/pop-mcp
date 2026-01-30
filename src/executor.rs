@@ -3,6 +3,7 @@
 #[cfg(feature = "pop-e2e")]
 use std::path::PathBuf;
 use std::process::Command;
+use std::process::{Child, Stdio};
 
 use crate::error::{PopMcpError, PopMcpResult};
 
@@ -83,6 +84,21 @@ impl PopExecutor {
             stdout,
             stderr,
             success: output.status.success(),
+        })
+    }
+
+    /// Spawn a Pop CLI command with piped stdout/stderr.
+    pub fn spawn(&self, args: &[&str]) -> PopMcpResult<Child> {
+        let mut cmd = Command::new("pop");
+        cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
+
+        #[cfg(feature = "pop-e2e")]
+        if let Some(ref cwd) = self.cwd {
+            cmd.current_dir(cwd);
+        }
+
+        cmd.spawn().map_err(|e| {
+            PopMcpError::CommandExecution(format!("Failed to spawn pop command: {}", e))
         })
     }
 

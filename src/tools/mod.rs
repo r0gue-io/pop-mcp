@@ -33,6 +33,7 @@ pub use test::chain::{test_chain, TestChainParams};
 pub use test::contract::{test_contract, TestContractParams};
 pub use up::chain::{up_ink_node, UpInkNodeParams};
 pub use up::contract::{deploy_contract, DeployContractParams};
+pub use up::network::{up_network, UpNetworkParams};
 
 pub(crate) use new::contract::{list_templates, ListTemplatesParams};
 

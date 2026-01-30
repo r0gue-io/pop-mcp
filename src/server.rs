@@ -196,15 +196,6 @@ impl PopMcpServer {
         Ok(result)
     }
 
-    #[tool(description = "Launch a local network from a Zombienet config (pop up network)")]
-    async fn up_network(
-        &self,
-        Parameters(params): Parameters<UpNetworkParams>,
-    ) -> Result<CallToolResult, McpError> {
-        up_network(&self.executor, params)
-            .map_err(|e| McpError::internal_error(e.to_string(), None))
-    }
-
     #[tool(description = "Stop running local ink! nodes by PID")]
     async fn clean_nodes(
         &self,

@@ -124,11 +124,8 @@ fn validate_frontend_requirements() -> Result<(), String> {
             node_major
         ));
     }
-    if !has_supported_package_manager() {
-        return Err(
-            "with_frontend requires a package manager (pnpm, bun, yarn, or npm) available on PATH."
-                .to_owned(),
-        );
+    if !has_npm() {
+        return Err("with_frontend requires npm available on PATH.".to_owned());
     }
     Ok(())
 }
@@ -162,14 +159,12 @@ fn node_major_version() -> Result<u32, String> {
         .map_err(|_| "Failed to parse Node.js major version.".to_owned())
 }
 
-fn has_supported_package_manager() -> bool {
-    ["pnpm", "bun", "yarn", "npm"].iter().any(|bin| {
-        Command::new(bin)
-            .arg("--version")
-            .output()
-            .map(|output| output.status.success())
-            .unwrap_or(false)
-    })
+fn has_npm() -> bool {
+    Command::new("npm")
+        .arg("--version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
 }
 
 // Frontend creation temporarily disabled.

@@ -73,7 +73,7 @@ fn create_contract_with_frontend_creates_frontend_dir() -> Result<()> {
         let message = text(&result)?;
         assert!(
             message.contains("with_frontend requires Node.js v20+")
-                || message.contains("with_frontend requires a package manager")
+                || message.contains("with_frontend requires npm")
         );
         return Ok(());
     }
@@ -84,7 +84,7 @@ fn create_contract_with_frontend_creates_frontend_dir() -> Result<()> {
 }
 
 fn frontend_requirements_met() -> bool {
-    node_major_version().is_some_and(|major| major >= 20) && has_supported_package_manager()
+    node_major_version().is_some_and(|major| major >= 20) && has_npm()
 }
 
 fn node_major_version() -> Option<u32> {
@@ -98,12 +98,10 @@ fn node_major_version() -> Option<u32> {
     version.split('.').next()?.parse::<u32>().ok()
 }
 
-fn has_supported_package_manager() -> bool {
-    ["pnpm", "bun", "yarn", "npm"].iter().any(|bin| {
-        Command::new(bin)
-            .arg("--version")
-            .output()
-            .map(|output| output.status.success())
-            .unwrap_or(false)
-    })
+fn has_npm() -> bool {
+    Command::new("npm")
+        .arg("--version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
 }

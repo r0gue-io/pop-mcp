@@ -4,7 +4,7 @@ use rmcp::model::CallToolResult;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::error::PopMcpResult;
+use crate::error::{PopMcpError, PopMcpResult};
 use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
@@ -30,16 +30,16 @@ pub struct CallContractParams {
     /// Whether to submit an extrinsic for on-chain execution.
     #[schemars(description = "Submit an extrinsic for on-chain execution")]
     pub execute: Option<bool>,
-    /// Secret key URI for signing.
-    #[schemars(description = "Secret key URI for signing")]
-    pub suri: Option<String>,
     /// WebSocket URL of the node.
     #[schemars(description = "WebSocket URL of the node")]
     pub url: Option<String>,
 }
 
 /// Build command arguments for call_contract
-fn build_call_contract_args(params: &CallContractParams) -> Vec<&str> {
+fn build_call_contract_args<'a>(
+    params: &'a CallContractParams,
+    effective_suri: Option<&'a str>,
+) -> Vec<&'a str> {
     let mut args = vec![
         "call",
         "contract",
@@ -65,9 +65,9 @@ fn build_call_contract_args(params: &CallContractParams) -> Vec<&str> {
         args.push(value.as_str());
     }
 
-    if let Some(ref suri) = params.suri {
+    if let Some(suri) = effective_suri {
         args.push("--suri");
-        args.push(suri.as_str());
+        args.push(suri);
     }
 
     if let Some(ref url) = params.url {
@@ -103,7 +103,14 @@ pub fn call_contract(
     executor: &PopExecutor,
     params: CallContractParams,
 ) -> PopMcpResult<CallToolResult> {
-    let args = build_call_contract_args(&params);
+    // Read suri from PRIVATE_KEY environment variable
+    let suri = crate::get_default_suri();
+    if params.execute.unwrap_or(false) && suri.is_none() {
+        return Err(PopMcpError::InvalidInput(
+            "PRIVATE_KEY environment variable is required when execute=true".to_owned(),
+        ));
+    }
+    let args = build_call_contract_args(&params, suri.as_deref());
 
     match executor.execute(&args) {
         Ok(output) => {
@@ -126,74 +133,68 @@ mod tests {
     use super::*;
 
     #[test]
-    fn build_args_variants() {
-        struct Case {
-            params: CallContractParams,
-            expected: Vec<&'static str>,
-        }
+    fn build_args_minimal() {
+        let params = CallContractParams {
+            path: "./my_contract".to_owned(),
+            contract: "0x1234".to_owned(),
+            message: "get".to_owned(),
+            args: None,
+            value: None,
+            execute: None,
+            url: None,
+        };
+        let args = build_call_contract_args(&params, None);
+        assert_eq!(
+            args,
+            vec![
+                "call",
+                "contract",
+                "--path",
+                "./my_contract",
+                "--contract",
+                "0x1234",
+                "--message",
+                "get",
+                "-y",
+            ]
+        );
+    }
 
-        let cases = vec![
-            Case {
-                params: CallContractParams {
-                    path: "./my_contract".to_owned(),
-                    contract: "0x1234".to_owned(),
-                    message: "get".to_owned(),
-                    args: None,
-                    value: None,
-                    execute: None,
-                    suri: None,
-                    url: None,
-                },
-                expected: vec![
-                    "call",
-                    "contract",
-                    "--path",
-                    "./my_contract",
-                    "--contract",
-                    "0x1234",
-                    "--message",
-                    "get",
-                    "-y",
-                ],
-            },
-            Case {
-                params: CallContractParams {
-                    path: "./p".to_owned(),
-                    contract: "0xabc".to_owned(),
-                    message: "transfer".to_owned(),
-                    args: Some("0x5678 100".to_owned()),
-                    value: Some("10".to_owned()),
-                    execute: Some(true),
-                    suri: Some("//Alice".to_owned()),
-                    url: Some("ws://explicit:9944".to_owned()),
-                },
-                expected: vec![
-                    "call",
-                    "contract",
-                    "--path",
-                    "./p",
-                    "--contract",
-                    "0xabc",
-                    "--message",
-                    "transfer",
-                    "-y",
-                    "--args",
-                    "0x5678",
-                    "100",
-                    "--value",
-                    "10",
-                    "--suri",
-                    "//Alice",
-                    "--url",
-                    "ws://explicit:9944",
-                    "--execute",
-                ],
-            },
-        ];
-
-        for case in cases {
-            let args = build_call_contract_args(&case.params);
-            assert_eq!(args, case.expected);
-        }
+    #[test]
+    fn build_args_with_env_suri() {
+        let params = CallContractParams {
+            path: "./p".to_owned(),
+            contract: "0xabc".to_owned(),
+            message: "transfer".to_owned(),
+            args: Some("0x5678 100".to_owned()),
+            value: Some("10".to_owned()),
+            execute: Some(true),
+            url: Some("ws://localhost:9944".to_owned()),
+        };
+        let args = build_call_contract_args(&params, Some("//Alice"));
+        assert_eq!(
+            args,
+            vec![
+                "call",
+                "contract",
+                "--path",
+                "./p",
+                "--contract",
+                "0xabc",
+                "--message",
+                "transfer",
+                "-y",
+                "--args",
+                "0x5678",
+                "100",
+                "--value",
+                "10",
+                "--suri",
+                "//Alice",
+                "--url",
+                "ws://localhost:9944",
+                "--execute",
+            ]
+        );
     }
 }

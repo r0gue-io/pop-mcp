@@ -1,4 +1,4 @@
-use crate::common::{is_error, is_success, text, Contract, InkNode, TestEnv, DEFAULT_SURI};
+use crate::common::{is_error, is_success, text, Contract, InkNode, PrivateKeyGuard, TestEnv};
 use anyhow::Result;
 use pop_mcp_server::tools::call::contract::{call_contract, CallContractParams};
 
@@ -12,7 +12,6 @@ fn call_contract_nonexistent_path_fails() -> Result<()> {
         args: None,
         value: None,
         execute: None,
-        suri: None,
         url: None,
     };
 
@@ -24,6 +23,7 @@ fn call_contract_nonexistent_path_fails() -> Result<()> {
 
 #[test]
 fn call_contract_get_and_flip_mutates_state() -> Result<()> {
+    let _guard = PrivateKeyGuard::set();
     let env = TestEnv::new()?;
     let (url, _guard) = InkNode::ensure()?;
     let mut contract = Contract::create_build_or_use()?;
@@ -41,7 +41,6 @@ fn call_contract_get_and_flip_mutates_state() -> Result<()> {
             args: None,
             value: None,
             execute: None,
-            suri: Some(DEFAULT_SURI.to_string()),
             url: Some(url.clone()),
         },
     )?;
@@ -58,7 +57,6 @@ fn call_contract_get_and_flip_mutates_state() -> Result<()> {
             args: None,
             value: None,
             execute: Some(true),
-            suri: Some(DEFAULT_SURI.to_string()),
             url: Some(url.clone()),
         },
     )?;
@@ -74,11 +72,11 @@ fn call_contract_get_and_flip_mutates_state() -> Result<()> {
             args: None,
             value: None,
             execute: None,
-            suri: Some(DEFAULT_SURI.to_string()),
             url: Some(url),
         },
     )?;
     assert!(is_success(&get_result));
     assert!(text(&get_result)?.contains("true"));
+
     Ok(())
 }

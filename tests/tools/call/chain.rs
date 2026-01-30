@@ -1,4 +1,4 @@
-use crate::common::{is_error, is_success, text, InkNode, TestEnv, DEFAULT_SURI};
+use crate::common::{is_error, is_success, text, InkNode, PrivateKeyGuard, TestEnv};
 use anyhow::Result;
 use pop_mcp_server::tools::call::chain::{call_chain, CallChainParams};
 
@@ -14,7 +14,6 @@ fn call_chain_metadata_lists_pallets() -> Result<()> {
             pallet: None,
             function: None,
             args: None,
-            suri: None,
             sudo: None,
             metadata: Some(true),
         },
@@ -40,7 +39,6 @@ fn call_chain_metadata_inspects_pallet() -> Result<()> {
             pallet: Some("System".to_string()),
             function: None,
             args: None,
-            suri: None,
             sudo: None,
             metadata: Some(true),
         },
@@ -66,7 +64,6 @@ fn call_chain_metadata_invalid_pallet_fails() -> Result<()> {
             pallet: Some("NonExistentPallet".to_string()),
             function: None,
             args: None,
-            suri: None,
             sudo: None,
             metadata: Some(true),
         },
@@ -91,7 +88,6 @@ fn call_chain_reads_constant() -> Result<()> {
             pallet: Some("Balances".to_string()),
             function: Some("ExistentialDeposit".to_string()),
             args: None,
-            suri: None,
             sudo: None,
             metadata: None,
         },
@@ -119,7 +115,6 @@ fn call_chain_queries_storage() -> Result<()> {
             args: Some(vec![
                 "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY".to_string()
             ]),
-            suri: None,
             sudo: None,
             metadata: None,
         },
@@ -134,6 +129,7 @@ fn call_chain_queries_storage() -> Result<()> {
 
 #[test]
 fn call_chain_executes_transaction() -> Result<()> {
+    let _guard = PrivateKeyGuard::set();
     let env = TestEnv::new()?;
     let (url, _guard) = InkNode::ensure()?;
 
@@ -145,7 +141,6 @@ fn call_chain_executes_transaction() -> Result<()> {
             pallet: Some("System".to_string()),
             function: Some("remark".to_string()),
             args: Some(vec!["0x1234".to_string()]),
-            suri: Some(DEFAULT_SURI.to_string()),
             sudo: None,
             metadata: None,
         },
@@ -154,6 +149,30 @@ fn call_chain_executes_transaction() -> Result<()> {
     assert!(is_success(&result));
     let output = text(&result)?;
     // Successful transaction returns extrinsic hash
+    assert!(output.contains("Extrinsic") || output.contains("hash") || output.contains("0x"));
+    Ok(())
+}
+
+#[test]
+fn call_chain_transaction_uses_env_suri() -> Result<()> {
+    let _guard = PrivateKeyGuard::set();
+    let env = TestEnv::new()?;
+    let (url, _guard) = InkNode::ensure()?;
+
+    let result = call_chain(
+        env.executor(),
+        CallChainParams {
+            url: url.to_string(),
+            pallet: Some("System".to_string()),
+            function: Some("remark".to_string()),
+            args: Some(vec!["0x5678".to_string()]),
+            sudo: None,
+            metadata: None,
+        },
+    )?;
+
+    assert!(is_success(&result));
+    let output = text(&result)?;
     assert!(output.contains("Extrinsic") || output.contains("hash") || output.contains("0x"));
     Ok(())
 }

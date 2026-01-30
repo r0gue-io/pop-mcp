@@ -76,6 +76,8 @@ fn build_create_contract_args(params: &CreateContractParams) -> Vec<&str> {
     ];
     if params.with_frontend == Some(true) {
         args.push("--with-frontend=typink");
+        args.push("--package-manager");
+        args.push("npm");
     }
     args
 }
@@ -400,7 +402,9 @@ mod tests {
                 "my_contract",
                 "--template",
                 "standard",
-                "--with-frontend=typink"
+                "--with-frontend=typink",
+                "--package-manager",
+                "npm"
             ]
         );
     }

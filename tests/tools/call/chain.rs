@@ -15,6 +15,7 @@ fn call_chain_metadata_lists_pallets() -> Result<()> {
             function: None,
             args: None,
             sudo: None,
+            execute: None,
             metadata: Some(true),
         },
     )?;
@@ -40,6 +41,7 @@ fn call_chain_metadata_inspects_pallet() -> Result<()> {
             function: None,
             args: None,
             sudo: None,
+            execute: None,
             metadata: Some(true),
         },
     )?;
@@ -65,6 +67,7 @@ fn call_chain_metadata_invalid_pallet_fails() -> Result<()> {
             function: None,
             args: None,
             sudo: None,
+            execute: None,
             metadata: Some(true),
         },
     )?;
@@ -89,6 +92,7 @@ fn call_chain_reads_constant() -> Result<()> {
             function: Some("ExistentialDeposit".to_string()),
             args: None,
             sudo: None,
+            execute: None,
             metadata: None,
         },
     )?;
@@ -116,6 +120,7 @@ fn call_chain_queries_storage() -> Result<()> {
                 "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY".to_string()
             ]),
             sudo: None,
+            execute: None,
             metadata: None,
         },
     )?;
@@ -142,6 +147,7 @@ fn call_chain_executes_transaction() -> Result<()> {
             function: Some("remark".to_string()),
             args: Some(vec!["0x1234".to_string()]),
             sudo: None,
+            execute: Some(true),
             metadata: None,
         },
     )?;
@@ -167,6 +173,7 @@ fn call_chain_transaction_uses_env_suri() -> Result<()> {
             function: Some("remark".to_string()),
             args: Some(vec!["0x5678".to_string()]),
             sudo: None,
+            execute: Some(true),
             metadata: None,
         },
     )?;

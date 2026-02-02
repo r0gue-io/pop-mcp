@@ -27,6 +27,7 @@ fn build_contract_creates_ink_artifacts() -> Result<()> {
         CreateContractParams {
             name: "build_test".to_string(),
             template: "standard".to_string(),
+            with_frontend: None,
         },
     )?;
 

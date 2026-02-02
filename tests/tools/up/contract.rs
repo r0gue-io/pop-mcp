@@ -36,7 +36,7 @@ fn deploy_contract_succeeds_and_returns_address() -> Result<()> {
             value: None,
             execute: Some(true),
             suri: Some(DEFAULT_SURI.to_string()),
-            url: Some(url.to_string()),
+            url: Some(url.clone()),
         },
         None,
     )?;

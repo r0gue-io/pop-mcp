@@ -3,6 +3,7 @@
 use rmcp::model::CallToolResult;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::process::Command;
 
 use crate::error::PopMcpResult;
 use crate::executor::PopExecutor;
@@ -43,6 +44,9 @@ pub struct CreateContractParams {
         description = "Template to use (standard, erc20, erc721, erc1155, dns, cross-contract-calls, multisig)"
     )]
     pub template: String,
+    /// Whether to scaffold a frontend using the typink template.
+    #[schemars(description = "Scaffold a typink frontend alongside the contract")]
+    pub with_frontend: Option<bool>,
 }
 
 impl CreateContractParams {
@@ -62,14 +66,20 @@ impl CreateContractParams {
 }
 
 /// Build command arguments for create_contract
-fn build_create_contract_args(params: &CreateContractParams) -> [&str; 5] {
-    [
+fn build_create_contract_args(params: &CreateContractParams) -> Vec<&str> {
+    let mut args = vec![
         "new",
         "contract",
         params.name.as_str(),
         "--template",
         params.template.as_str(),
-    ]
+    ];
+    if params.with_frontend == Some(true) {
+        args.push("--with-frontend=typink");
+        args.push("--package-manager");
+        args.push("npm");
+    }
+    args
 }
 
 /// Execute create_contract tool
@@ -82,15 +92,79 @@ pub fn create_contract(
         .validate()
         .map_err(crate::error::PopMcpError::InvalidInput)?;
 
+    if params.with_frontend == Some(true) {
+        if let Err(message) = validate_frontend_requirements() {
+            return Ok(error_result(message));
+        }
+    }
+
     let args = build_create_contract_args(&params);
 
     match executor.execute(&args) {
-        Ok(_) => Ok(success_result(format!(
-            "Successfully created contract: {}",
-            params.name
-        ))),
+        Ok(_) => {
+            let message = if params.with_frontend == Some(true) {
+                format!(
+                    "Successfully created contract with typink frontend: {}",
+                    params.name
+                )
+            } else {
+                format!("Successfully created contract: {}", params.name)
+            };
+            Ok(success_result(message))
+        }
         Err(e) => Ok(error_result(format!("Failed to create contract: {}", e))),
     }
+}
+
+fn validate_frontend_requirements() -> Result<(), String> {
+    let node_major = node_major_version()?;
+    if node_major < 20 {
+        return Err(format!(
+            "with_frontend requires Node.js v20+ (detected v{}). Install Node.js v20+ and try again.",
+            node_major
+        ));
+    }
+    if !has_npm() {
+        return Err("with_frontend requires npm available on PATH.".to_owned());
+    }
+    Ok(())
+}
+
+fn node_major_version() -> Result<u32, String> {
+    let output = Command::new("node")
+        .arg("--version")
+        .output()
+        .map_err(|_| {
+            "with_frontend requires Node.js v20+ installed. Install Node.js v20+ and try again."
+                .to_owned()
+        })?;
+
+    if !output.status.success() {
+        return Err(
+            "with_frontend requires Node.js v20+ installed. Install Node.js v20+ and try again."
+                .to_owned(),
+        );
+    }
+
+    let version = String::from_utf8(output.stdout)
+        .map_err(|_| "Failed to parse Node.js version output.".to_owned())?;
+    let version = version.trim();
+    let version = version.strip_prefix('v').unwrap_or(version);
+    let major = version
+        .split('.')
+        .next()
+        .ok_or_else(|| "Failed to parse Node.js version output.".to_owned())?;
+    major
+        .parse::<u32>()
+        .map_err(|_| "Failed to parse Node.js major version.".to_owned())
+}
+
+fn has_npm() -> bool {
+    Command::new("npm")
+        .arg("--version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
 }
 
 // Frontend creation temporarily disabled.
@@ -273,6 +347,7 @@ mod tests {
             let params = CreateContractParams {
                 name: (*name).to_owned(),
                 template: "standard".to_owned(),
+                with_frontend: None,
             };
             assert!(params.validate().is_ok());
         }
@@ -286,6 +361,7 @@ mod tests {
             let params = CreateContractParams {
                 name: (*name).to_owned(),
                 template: "standard".to_owned(),
+                with_frontend: None,
             };
             assert!(params.validate().is_err());
         }
@@ -296,11 +372,49 @@ mod tests {
         let params = CreateContractParams {
             name: "my_contract".to_owned(),
             template: "erc20".to_owned(),
+            with_frontend: None,
         };
         let args = build_create_contract_args(&params);
         assert_eq!(
             args,
-            ["new", "contract", "my_contract", "--template", "erc20"]
+            vec!["new", "contract", "my_contract", "--template", "erc20"]
+        );
+    }
+
+    #[test]
+    fn build_args_include_frontend_when_true() {
+        let params = CreateContractParams {
+            name: "my_contract".to_owned(),
+            template: "standard".to_owned(),
+            with_frontend: Some(true),
+        };
+        let args = build_create_contract_args(&params);
+        assert_eq!(
+            args,
+            vec![
+                "new",
+                "contract",
+                "my_contract",
+                "--template",
+                "standard",
+                "--with-frontend=typink",
+                "--package-manager",
+                "npm"
+            ]
+        );
+    }
+
+    #[test]
+    fn build_args_exclude_frontend_when_false() {
+        let params = CreateContractParams {
+            name: "my_contract".to_owned(),
+            template: "standard".to_owned(),
+            with_frontend: Some(false),
+        };
+        let args = build_create_contract_args(&params);
+        assert_eq!(
+            args,
+            vec!["new", "contract", "my_contract", "--template", "standard"]
         );
     }
 

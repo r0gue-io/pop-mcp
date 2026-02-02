@@ -56,7 +56,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.91.1
+          toolchain: 1.92.0
           default: true
           target: wasm32-unknown-unknown
           components: rust-src, clippy
@@ -73,6 +73,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y protobuf-compiler clang cmake
           protoc --version
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
       - name: Cache pop assets
         uses: actions/cache@v4
@@ -85,6 +90,9 @@ jobs:
 
       - name: Bootstrap pop binaries
         run: sudo "$(which pop)" install -y
+
+      - name: Pin cargo-contract to ink beta.1
+        run: cargo install --locked --force cargo-contract --version 6.0.0-beta.1
 
       - name: Smoke test ink-node
         run: |

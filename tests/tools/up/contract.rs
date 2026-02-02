@@ -1,6 +1,4 @@
-use crate::common::{
-    is_error, is_success, text, Contract, InkNode, PrivateKeyGuard, TestEnv, DEFAULT_SURI,
-};
+use crate::common::{is_error, is_success, text, Contract, InkNode, PrivateKeyGuard, TestEnv};
 use anyhow::Result;
 use pop_mcp_server::tools::up::contract::{deploy_contract, DeployContractParams};
 
@@ -37,7 +35,6 @@ fn deploy_contract_succeeds_and_returns_address() -> Result<()> {
             args: Some("false".to_string()),
             value: None,
             execute: Some(true),
-            suri: Some(DEFAULT_SURI.to_string()),
             url: Some(url.clone()),
         },
         None,

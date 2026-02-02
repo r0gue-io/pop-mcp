@@ -54,7 +54,7 @@ Powerful tools for complete Polkadot development:
 - `benchmark_pallet` - Run pallet benchmarks
 
 #### Chain Interaction
-- `call_chain` - Execute extrinsics, query storage, read constants
+- `call_chain` - Execute extrinsics (tool-level `execute`), query storage, read constants
 - `query_chain_storage` - Read chain state
 - `read_chain_constant` - Read runtime constants
 
@@ -433,6 +433,23 @@ Calls a method on a deployed contract.
 
 Signing:
 - Set `PRIVATE_KEY` in the environment to a dev key URI (e.g. `//Alice`) when `execute=true`.
+
+#### call_chain
+Interact with a chain runtime: execute transactions, query storage, or read constants.
+
+```typescript
+{
+  url: string,
+  pallet?: string,
+  function?: string,
+  args?: string[],
+  sudo?: boolean,
+  execute?: boolean,       // Tool-level flag. When true, requires PRIVATE_KEY and enables signing.
+  metadata?: boolean
+}
+```
+
+Note: `execute` is a Pop-MCP flag and is not passed to Pop CLI.
 
 ### Network Tools
 

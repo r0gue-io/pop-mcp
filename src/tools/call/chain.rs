@@ -41,8 +41,10 @@ pub struct CallChainParams {
     )]
     pub sudo: Option<bool>,
 
-    /// Submit an extrinsic for on-chain execution.
-    #[schemars(description = "Submit an extrinsic for on-chain execution")]
+    /// Submit an extrinsic for on-chain execution (tool-level flag, not passed to Pop CLI).
+    #[schemars(
+        description = "Tool-level flag: indicates the call should submit an extrinsic and requires PRIVATE_KEY. Not passed to Pop CLI."
+    )]
     pub execute: Option<bool>,
 
     /// Display chain metadata instead of executing a call.

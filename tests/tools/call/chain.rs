@@ -168,7 +168,7 @@ fn call_chain_transaction_uses_env_suri() -> Result<()> {
     let result = call_chain(
         env.executor(),
         CallChainParams {
-            url: url.to_string(),
+            url: url.clone(),
             pallet: Some("System".to_string()),
             function: Some("remark".to_string()),
             args: Some(vec!["0x5678".to_string()]),

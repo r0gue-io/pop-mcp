@@ -145,9 +145,9 @@ pub fn call_chain(executor: &PopExecutor, params: CallChainParams) -> PopMcpResu
     let metadata_mode = params.metadata.unwrap_or(false);
     // Read suri from PRIVATE_KEY environment variable
     let suri = crate::read_private_key_suri();
-    if !metadata_mode && suri.is_none() {
+    if !metadata_mode && params.sudo.unwrap_or(false) && suri.is_none() {
         return Err(PopMcpError::InvalidInput(
-            "PRIVATE_KEY environment variable is required when submitting a transaction".to_owned(),
+            "PRIVATE_KEY environment variable is required when sudo=true".to_owned(),
         ));
     }
 

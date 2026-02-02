@@ -409,9 +409,9 @@ Deploys and instantiates a contract.
   path: string,              // Contract directory or .contract bundle
   constructor?: string,      // Constructor name (default: "new")
   args?: string,            // Constructor arguments (space-separated)
-  url?: string,             // Node WebSocket URL (default: ws://localhost:9944)
-  dryRun?: boolean,         // Dry run without submitting (default: false)
-  uploadOnly?: boolean      // Only upload code, don't instantiate (default: false)
+  value?: string,           // Initial balance to transfer (in tokens)
+  execute?: boolean,        // Submit an extrinsic for execution (default: false)
+  url?: string              // Node WebSocket URL (default: ws://localhost:9944)
 }
 ```
 
@@ -423,11 +423,13 @@ Calls a method on a deployed contract.
 
 ```typescript
 {
+  path: string,             // Contract directory (needed for metadata)
   contract: string,         // Contract address
   message: string,          // Method name to call
   args?: string,           // Method arguments (space-separated)
-  url?: string,            // Node WebSocket URL (default: ws://localhost:9944)
-  dryRun?: boolean         // Dry run without submitting (default: false)
+  value?: string,          // Value to transfer with the call (in tokens)
+  execute?: boolean,       // Submit an extrinsic for execution (default: false)
+  url?: string             // Node WebSocket URL (default: ws://localhost:9944)
 }
 ```
 

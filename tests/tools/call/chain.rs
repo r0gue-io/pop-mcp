@@ -78,6 +78,7 @@ fn call_chain_metadata_invalid_pallet_fails() -> Result<()> {
 
 #[test]
 fn call_chain_reads_constant() -> Result<()> {
+    let _guard = PrivateKeyGuard::set();
     let env = TestEnv::new()?;
     let (url, _guard) = InkNode::ensure()?;
 
@@ -102,6 +103,7 @@ fn call_chain_reads_constant() -> Result<()> {
 
 #[test]
 fn call_chain_queries_storage() -> Result<()> {
+    let _guard = PrivateKeyGuard::set();
     let env = TestEnv::new()?;
     let (url, _guard) = InkNode::ensure()?;
 

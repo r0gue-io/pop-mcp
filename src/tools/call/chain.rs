@@ -142,12 +142,16 @@ fn is_error_output(output: &str) -> bool {
 pub fn call_chain(executor: &PopExecutor, params: CallChainParams) -> PopMcpResult<CallToolResult> {
     params.validate().map_err(PopMcpError::InvalidInput)?;
 
+    let metadata_mode = params.metadata.unwrap_or(false);
     // Read suri from PRIVATE_KEY environment variable
     let suri = crate::read_private_key_suri();
+    if !metadata_mode && suri.is_none() {
+        return Err(PopMcpError::InvalidInput(
+            "PRIVATE_KEY environment variable is required when submitting a transaction".to_owned(),
+        ));
+    }
 
     let mut args = build_call_chain_args(&params);
-
-    let metadata_mode = params.metadata.unwrap_or(false);
     if !metadata_mode {
         if let Some(suri) = suri {
             args.push("--suri".to_owned());

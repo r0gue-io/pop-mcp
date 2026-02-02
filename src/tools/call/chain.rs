@@ -79,7 +79,7 @@ impl CallChainParams {
 }
 
 /// Build command arguments for call_chain
-fn build_call_chain_args(params: &CallChainParams, effective_suri: Option<&str>) -> Vec<String> {
+fn build_call_chain_args(params: &CallChainParams) -> Vec<String> {
     let mut args = vec!["call".to_owned(), "chain".to_owned()];
 
     args.push("--url".to_owned());
@@ -110,11 +110,6 @@ fn build_call_chain_args(params: &CallChainParams, effective_suri: Option<&str>)
                 args.push("--args".to_owned());
                 args.extend(call_args.iter().cloned());
             }
-        }
-
-        if let Some(suri) = effective_suri {
-            args.push("--suri".to_owned());
-            args.push(suri.to_owned());
         }
 
         if params.sudo.unwrap_or(false) {
@@ -148,12 +143,18 @@ pub fn call_chain(executor: &PopExecutor, params: CallChainParams) -> PopMcpResu
     params.validate().map_err(PopMcpError::InvalidInput)?;
 
     // Read suri from PRIVATE_KEY environment variable
-    let suri = crate::get_default_suri();
+    let suri = crate::read_private_key_suri();
 
-    let args = build_call_chain_args(&params, suri.as_deref());
-    let args_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let mut args = build_call_chain_args(&params);
 
     let metadata_mode = params.metadata.unwrap_or(false);
+    if !metadata_mode {
+        if let Some(suri) = suri {
+            args.push("--suri".to_owned());
+            args.push(suri);
+        }
+    }
+    let args_refs: Vec<&str> = args.iter().map(String::as_str).collect();
 
     match executor.execute(&args_refs) {
         Ok(output) => {
@@ -301,7 +302,7 @@ mod tests {
             sudo: None,
             metadata: Some(true),
         };
-        let args = build_call_chain_args(&params, None);
+        let args = build_call_chain_args(&params);
         assert_eq!(
             args,
             vec![
@@ -324,7 +325,7 @@ mod tests {
             sudo: None,
             metadata: Some(true),
         };
-        let args = build_call_chain_args(&params, None);
+        let args = build_call_chain_args(&params);
         assert_eq!(
             args,
             vec![
@@ -351,7 +352,7 @@ mod tests {
             sudo: None,
             metadata: None,
         };
-        let args = build_call_chain_args(&params, None);
+        let args = build_call_chain_args(&params);
         assert_eq!(
             args,
             vec![
@@ -371,7 +372,7 @@ mod tests {
     }
 
     #[test]
-    fn build_args_transaction_with_env_suri() {
+    fn build_args_transaction() {
         let params = CallChainParams {
             url: "ws://localhost:9944".to_owned(),
             pallet: Some("system".to_owned()),
@@ -380,8 +381,7 @@ mod tests {
             sudo: Some(true),
             metadata: None,
         };
-        // suri comes from PRIVATE_KEY env var
-        let args = build_call_chain_args(&params, Some("//Alice"));
+        let args = build_call_chain_args(&params);
         assert_eq!(
             args,
             vec![
@@ -395,39 +395,7 @@ mod tests {
                 "remark",
                 "--args",
                 "0x1234",
-                "--suri",
-                "//Alice",
                 "--sudo",
-                "-y"
-            ]
-        );
-    }
-
-    #[test]
-    fn build_args_transaction_without_suri() {
-        let params = CallChainParams {
-            url: "ws://localhost:9944".to_owned(),
-            pallet: Some("system".to_owned()),
-            function: Some("remark".to_owned()),
-            args: Some(vec!["0x1234".to_owned()]),
-            sudo: None,
-            metadata: None,
-        };
-        // No PRIVATE_KEY env var set
-        let args = build_call_chain_args(&params, None);
-        assert_eq!(
-            args,
-            vec![
-                "call",
-                "chain",
-                "--url",
-                "ws://localhost:9944",
-                "--pallet",
-                "system",
-                "--function",
-                "remark",
-                "--args",
-                "0x1234",
                 "-y"
             ]
         );
@@ -443,7 +411,7 @@ mod tests {
             sudo: None,
             metadata: None,
         };
-        let args = build_call_chain_args(&params, None);
+        let args = build_call_chain_args(&params);
         assert_eq!(
             args,
             vec![

@@ -104,7 +104,7 @@ pub fn call_contract(
     params: CallContractParams,
 ) -> PopMcpResult<CallToolResult> {
     // Read suri from PRIVATE_KEY environment variable
-    let suri = crate::get_default_suri();
+    let suri = crate::read_private_key_suri();
     if params.execute.unwrap_or(false) && suri.is_none() {
         return Err(PopMcpError::InvalidInput(
             "PRIVATE_KEY environment variable is required when execute=true".to_owned(),

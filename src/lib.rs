@@ -12,7 +12,7 @@ pub use error::{PopMcpError, PopMcpResult};
 pub use executor::PopExecutor;
 pub use server::PopMcpServer;
 
-/// Default SURI from PRIVATE_KEY env var.
-pub fn get_default_suri() -> Option<String> {
+/// SURI from PRIVATE_KEY env var.
+pub fn read_private_key_suri() -> Option<String> {
     std::env::var("PRIVATE_KEY").ok()
 }

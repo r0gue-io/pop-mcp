@@ -1,0 +1,26 @@
+# pop up network ./tests/networks/paseo+asset-hub.toml -S v1.3.4
+
+[relaychain]
+chain = "paseo-local"
+
+[[relaychain.nodes]]
+name = "alice"
+validator = true
+ws_port = 9955
+rpc_port = 9935
+
+[[relaychain.nodes]]
+name = "bob"
+validator = true
+ws_port = 9956
+rpc_port = 9936
+
+[[parachains]]
+id = 1000
+chain = "asset-hub-paseo-local"
+
+[[parachains.collators]]
+name = "asset-hub"
+ws_port = 9957
+rpc_port = 8556
+args = ["-lxcm=trace,lsystem::events=trace,lruntime=trace"]

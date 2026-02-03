@@ -21,7 +21,7 @@ pub use build::chain::{build_chain, BuildChainParams};
 pub use build::contract::{build_contract, BuildContractParams};
 pub use call::chain::{call_chain, CallChainParams};
 pub use call::contract::{call_contract, CallContractParams};
-pub use clean::{clean_nodes, CleanNodesParams};
+pub use clean::{clean_network, clean_nodes, CleanNetworkParams, CleanNodesParams};
 pub use convert::{convert_address, ConvertAddressParams};
 pub use install::{
     check_pop_installation, install_pop_instructions, CheckPopInstallationParams,
@@ -33,6 +33,7 @@ pub use test::chain::{test_chain, TestChainParams};
 pub use test::contract::{test_contract, TestContractParams};
 pub use up::chain::{up_ink_node, UpInkNodeParams};
 pub use up::contract::{deploy_contract, DeployContractParams};
+pub use up::network::{up_network, UpNetworkParams};
 
 pub(crate) use new::contract::{list_templates, ListTemplatesParams};
 

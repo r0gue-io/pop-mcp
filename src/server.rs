@@ -196,12 +196,30 @@ impl PopMcpServer {
         Ok(result)
     }
 
+    #[tool(description = "Launch a local network using a zombienet spec")]
+    async fn up_network(
+        &self,
+        Parameters(params): Parameters<UpNetworkParams>,
+    ) -> Result<CallToolResult, McpError> {
+        up_network(&self.executor, params)
+            .map_err(|e| McpError::internal_error(e.to_string(), None))
+    }
+
     #[tool(description = "Stop running local ink! nodes by PID")]
     async fn clean_nodes(
         &self,
         Parameters(params): Parameters<CleanNodesParams>,
     ) -> Result<CallToolResult, McpError> {
         clean_nodes(&self.executor, params)
+            .map_err(|e| McpError::internal_error(e.to_string(), None))
+    }
+
+    #[tool(description = "Stop a running network by zombie.json path or base dir")]
+    async fn clean_network(
+        &self,
+        Parameters(params): Parameters<CleanNetworkParams>,
+    ) -> Result<CallToolResult, McpError> {
+        clean_network(&self.executor, params)
             .map_err(|e| McpError::internal_error(e.to_string(), None))
     }
 

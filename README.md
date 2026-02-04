@@ -409,11 +409,20 @@ Deploys and instantiates a contract.
   path: string,              // Contract directory or .contract bundle
   constructor?: string,      // Constructor name (default: "new")
   args?: string,            // Constructor arguments (space-separated)
-  suri?: string,            // Signing key URI (default: //Alice)
-  url?: string,             // Node WebSocket URL (default: ws://localhost:9944)
-  dryRun?: boolean,         // Dry run without submitting (default: false)
-  uploadOnly?: boolean      // Only upload code, don't instantiate (default: false)
+  value?: string,           // Initial balance to transfer (in tokens)
+  execute?: boolean,        // Submit an extrinsic for execution (default: false)
+  url?: string              // Node WebSocket URL (default: ws://localhost:9944)
 }
+```
+
+Signing:
+- Set `PRIVATE_KEY` in the environment to a dev key URI (e.g. `//Alice`) when `execute=true`.
+
+MCP client config example (recommended):
+
+```toml
+[mcp_servers.pop-mcp.env]
+PRIVATE_KEY = "//Alice"
 ```
 
 #### call_contract
@@ -421,14 +430,30 @@ Calls a method on a deployed contract.
 
 ```typescript
 {
+  path: string,             // Contract directory (needed for metadata)
   contract: string,         // Contract address
   message: string,          // Method name to call
   args?: string,           // Method arguments (space-separated)
-  suri?: string,           // Signing key URI (default: //Alice)
-  url?: string,            // Node WebSocket URL (default: ws://localhost:9944)
-  dryRun?: boolean         // Dry run without submitting (default: false)
+  value?: string,          // Value to transfer with the call (in tokens)
+  execute?: boolean,       // Submit an extrinsic for execution (default: false)
+  url?: string             // Node WebSocket URL (default: ws://localhost:9944)
 }
 ```
+
+Signing:
+- Set `PRIVATE_KEY` in the environment to a dev key URI (e.g. `//Alice`) when `execute=true`.
+
+MCP client config example (recommended):
+
+```toml
+[mcp_servers.pop-mcp.env]
+PRIVATE_KEY = "//Alice"
+```
+
+Security note:
+- Use dev keys only for local networks.
+- Prefer environment variables set in the MCP client config over CLI arguments.
+- Avoid logging or echoing secrets in tooling output.
 
 ### Network Tools
 

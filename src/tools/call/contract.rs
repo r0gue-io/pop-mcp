@@ -4,7 +4,7 @@ use rmcp::model::CallToolResult;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::error::PopMcpResult;
+use crate::error::{PopMcpError, PopMcpResult};
 use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
@@ -30,53 +30,45 @@ pub struct CallContractParams {
     /// Whether to submit an extrinsic for on-chain execution.
     #[schemars(description = "Submit an extrinsic for on-chain execution")]
     pub execute: Option<bool>,
-    /// Secret key URI for signing.
-    #[schemars(description = "Secret key URI for signing")]
-    pub suri: Option<String>,
     /// WebSocket URL of the node.
     #[schemars(description = "WebSocket URL of the node")]
     pub url: Option<String>,
 }
 
 /// Build command arguments for call_contract
-fn build_call_contract_args(params: &CallContractParams) -> Vec<&str> {
+fn build_call_contract_args(params: &CallContractParams) -> Vec<String> {
     let mut args = vec![
-        "call",
-        "contract",
-        "--path",
-        params.path.as_str(),
-        "--contract",
-        params.contract.as_str(),
-        "--message",
-        params.message.as_str(),
-        "-y",
+        "call".to_owned(),
+        "contract".to_owned(),
+        "--path".to_owned(),
+        params.path.clone(),
+        "--contract".to_owned(),
+        params.contract.clone(),
+        "--message".to_owned(),
+        params.message.clone(),
+        "-y".to_owned(),
     ];
 
     // Split space-separated arguments
     if let Some(ref contract_args) = params.args {
-        args.push("--args");
+        args.push("--args".to_owned());
         for arg in contract_args.split_whitespace() {
-            args.push(arg);
+            args.push(arg.to_owned());
         }
     }
 
     if let Some(ref value) = params.value {
-        args.push("--value");
-        args.push(value.as_str());
-    }
-
-    if let Some(ref suri) = params.suri {
-        args.push("--suri");
-        args.push(suri.as_str());
+        args.push("--value".to_owned());
+        args.push(value.clone());
     }
 
     if let Some(ref url) = params.url {
-        args.push("--url");
-        args.push(url.as_str());
+        args.push("--url".to_owned());
+        args.push(url.clone());
     }
 
     if params.execute.unwrap_or(false) {
-        args.push("--execute");
+        args.push("--execute".to_owned());
     }
 
     args
@@ -103,9 +95,23 @@ pub fn call_contract(
     executor: &PopExecutor,
     params: CallContractParams,
 ) -> PopMcpResult<CallToolResult> {
-    let args = build_call_contract_args(&params);
+    // Read suri from PRIVATE_KEY environment variable
+    let suri = crate::read_private_key_suri();
+    if params.execute.unwrap_or(false) && suri.is_none() {
+        return Err(PopMcpError::InvalidInput(
+            "PRIVATE_KEY environment variable is required when execute=true".to_owned(),
+        ));
+    }
+    let mut args = build_call_contract_args(&params);
+    if params.execute.unwrap_or(false) {
+        if let Some(suri) = suri {
+            args.push("--suri".to_owned());
+            args.push(suri);
+        }
+    }
+    let args_refs: Vec<&str> = args.iter().map(String::as_str).collect();
 
-    match executor.execute(&args) {
+    match executor.execute(&args_refs) {
         Ok(output) => {
             // Check if the output contains error indicators even if exit code was 0
             if is_error_output(&output) {
@@ -126,74 +132,66 @@ mod tests {
     use super::*;
 
     #[test]
-    fn build_args_variants() {
-        struct Case {
-            params: CallContractParams,
-            expected: Vec<&'static str>,
-        }
+    fn build_args_minimal() {
+        let params = CallContractParams {
+            path: "./my_contract".to_owned(),
+            contract: "0x1234".to_owned(),
+            message: "get".to_owned(),
+            args: None,
+            value: None,
+            execute: None,
+            url: None,
+        };
+        let args = build_call_contract_args(&params);
+        assert_eq!(
+            args,
+            vec![
+                "call".to_owned(),
+                "contract".to_owned(),
+                "--path".to_owned(),
+                "./my_contract".to_owned(),
+                "--contract".to_owned(),
+                "0x1234".to_owned(),
+                "--message".to_owned(),
+                "get".to_owned(),
+                "-y".to_owned(),
+            ]
+        );
+    }
 
-        let cases = vec![
-            Case {
-                params: CallContractParams {
-                    path: "./my_contract".to_owned(),
-                    contract: "0x1234".to_owned(),
-                    message: "get".to_owned(),
-                    args: None,
-                    value: None,
-                    execute: None,
-                    suri: None,
-                    url: None,
-                },
-                expected: vec![
-                    "call",
-                    "contract",
-                    "--path",
-                    "./my_contract",
-                    "--contract",
-                    "0x1234",
-                    "--message",
-                    "get",
-                    "-y",
-                ],
-            },
-            Case {
-                params: CallContractParams {
-                    path: "./p".to_owned(),
-                    contract: "0xabc".to_owned(),
-                    message: "transfer".to_owned(),
-                    args: Some("0x5678 100".to_owned()),
-                    value: Some("10".to_owned()),
-                    execute: Some(true),
-                    suri: Some("//Alice".to_owned()),
-                    url: Some("ws://explicit:9944".to_owned()),
-                },
-                expected: vec![
-                    "call",
-                    "contract",
-                    "--path",
-                    "./p",
-                    "--contract",
-                    "0xabc",
-                    "--message",
-                    "transfer",
-                    "-y",
-                    "--args",
-                    "0x5678",
-                    "100",
-                    "--value",
-                    "10",
-                    "--suri",
-                    "//Alice",
-                    "--url",
-                    "ws://explicit:9944",
-                    "--execute",
-                ],
-            },
-        ];
-
-        for case in cases {
-            let args = build_call_contract_args(&case.params);
-            assert_eq!(args, case.expected);
-        }
+    #[test]
+    fn build_args_with_execute() {
+        let params = CallContractParams {
+            path: "./p".to_owned(),
+            contract: "0xabc".to_owned(),
+            message: "transfer".to_owned(),
+            args: Some("0x5678 100".to_owned()),
+            value: Some("10".to_owned()),
+            execute: Some(true),
+            url: Some("ws://localhost:9944".to_owned()),
+        };
+        let args = build_call_contract_args(&params);
+        assert_eq!(
+            args,
+            vec![
+                "call".to_owned(),
+                "contract".to_owned(),
+                "--path".to_owned(),
+                "./p".to_owned(),
+                "--contract".to_owned(),
+                "0xabc".to_owned(),
+                "--message".to_owned(),
+                "transfer".to_owned(),
+                "-y".to_owned(),
+                "--args".to_owned(),
+                "0x5678".to_owned(),
+                "100".to_owned(),
+                "--value".to_owned(),
+                "10".to_owned(),
+                "--url".to_owned(),
+                "ws://localhost:9944".to_owned(),
+                "--execute".to_owned(),
+            ]
+        );
     }
 }

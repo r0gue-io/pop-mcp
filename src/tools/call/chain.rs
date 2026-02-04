@@ -35,21 +35,20 @@ pub struct CallChainParams {
     #[schemars(description = "Arguments for the call as space-separated values")]
     pub args: Option<Vec<String>>,
 
-    /// Secret key URI for signing transactions.
-    #[schemars(
-        description = "Secret key URI for signing (e.g., '//Alice'). Required for transactions, not for queries/constants."
-    )]
-    pub suri: Option<String>,
-
     /// Execute with root origin via sudo pallet.
     #[schemars(
         description = "Execute with root origin via sudo pallet. Not allowed with metadata=true."
     )]
     pub sudo: Option<bool>,
 
+    /// Submit an extrinsic for on-chain execution.
+    /// Note: tool-level flag; not passed to Pop CLI.
+    #[schemars(description = "Submit an extrinsic for on-chain execution")]
+    pub execute: Option<bool>,
+
     /// Display chain metadata instead of executing a call.
     #[schemars(
-        description = "Display chain metadata. Use alone to list all pallets, or with pallet to show pallet details (extrinsics, storage, constants). Cannot be used with function, args, suri, or sudo."
+        description = "Display chain metadata. Use alone to list all pallets, or with pallet to show pallet details (extrinsics, storage, constants). Cannot be used with function, args, sudo, or execute."
     )]
     pub metadata: Option<bool>,
 }
@@ -67,11 +66,11 @@ impl CallChainParams {
             if self.args.is_some() {
                 return Err("Cannot use 'args' with metadata=true".to_owned());
             }
-            if self.suri.is_some() {
-                return Err("Cannot use 'suri' with metadata=true".to_owned());
-            }
             if self.sudo.unwrap_or(false) {
                 return Err("Cannot use 'sudo' with metadata=true".to_owned());
+            }
+            if self.execute.unwrap_or(false) {
+                return Err("Cannot use 'execute' with metadata=true".to_owned());
             }
         } else {
             // In call mode, pallet and function are required
@@ -80,6 +79,9 @@ impl CallChainParams {
             }
             if self.function.is_none() {
                 return Err("'function' is required when metadata is not set".to_owned());
+            }
+            if self.sudo.unwrap_or(false) && !self.execute.unwrap_or(false) {
+                return Err("'execute' must be true when sudo=true".to_owned());
             }
         }
 
@@ -121,11 +123,6 @@ fn build_call_chain_args(params: &CallChainParams) -> Vec<String> {
             }
         }
 
-        if let Some(ref suri) = params.suri {
-            args.push("--suri".to_owned());
-            args.push(suri.clone());
-        }
-
         if params.sudo.unwrap_or(false) {
             args.push("--sudo".to_owned());
         }
@@ -156,10 +153,23 @@ fn is_error_output(output: &str) -> bool {
 pub fn call_chain(executor: &PopExecutor, params: CallChainParams) -> PopMcpResult<CallToolResult> {
     params.validate().map_err(PopMcpError::InvalidInput)?;
 
-    let args = build_call_chain_args(&params);
-    let args_refs: Vec<&str> = args.iter().map(String::as_str).collect();
-
     let metadata_mode = params.metadata.unwrap_or(false);
+    // Read suri from PRIVATE_KEY environment variable
+    let suri = crate::read_private_key_suri();
+    if params.execute.unwrap_or(false) && suri.is_none() {
+        return Err(PopMcpError::InvalidInput(
+            "PRIVATE_KEY environment variable is required when execute=true".to_owned(),
+        ));
+    }
+
+    let mut args = build_call_chain_args(&params);
+    if !metadata_mode && params.execute.unwrap_or(false) {
+        if let Some(suri) = suri {
+            args.push("--suri".to_owned());
+            args.push(suri);
+        }
+    }
+    let args_refs: Vec<&str> = args.iter().map(String::as_str).collect();
 
     match executor.execute(&args_refs) {
         Ok(output) => {
@@ -200,8 +210,8 @@ mod tests {
             pallet: Some("system".to_owned()),
             function: Some("account".to_owned()),
             args: None,
-            suri: None,
             sudo: None,
+            execute: None,
             metadata: Some(true),
         };
         assert!(params.validate().is_err());
@@ -214,22 +224,8 @@ mod tests {
             pallet: Some("system".to_owned()),
             function: None,
             args: Some(vec!["arg1".to_owned()]),
-            suri: None,
             sudo: None,
-            metadata: Some(true),
-        };
-        assert!(params.validate().is_err());
-    }
-
-    #[test]
-    fn validate_rejects_suri_with_metadata() {
-        let params = CallChainParams {
-            url: "ws://localhost:9944".to_owned(),
-            pallet: None,
-            function: None,
-            args: None,
-            suri: Some("//Alice".to_owned()),
-            sudo: None,
+            execute: None,
             metadata: Some(true),
         };
         assert!(params.validate().is_err());
@@ -242,8 +238,22 @@ mod tests {
             pallet: None,
             function: None,
             args: None,
-            suri: None,
             sudo: Some(true),
+            execute: None,
+            metadata: Some(true),
+        };
+        assert!(params.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_execute_with_metadata() {
+        let params = CallChainParams {
+            url: "ws://localhost:9944".to_owned(),
+            pallet: None,
+            function: None,
+            args: None,
+            sudo: None,
+            execute: Some(true),
             metadata: Some(true),
         };
         assert!(params.validate().is_err());
@@ -256,8 +266,8 @@ mod tests {
             pallet: None,
             function: Some("account".to_owned()),
             args: None,
-            suri: None,
             sudo: None,
+            execute: None,
             metadata: None,
         };
         assert!(params.validate().is_err());
@@ -270,8 +280,8 @@ mod tests {
             pallet: Some("system".to_owned()),
             function: None,
             args: None,
-            suri: None,
             sudo: None,
+            execute: None,
             metadata: None,
         };
         assert!(params.validate().is_err());
@@ -284,8 +294,8 @@ mod tests {
             pallet: None,
             function: None,
             args: None,
-            suri: None,
             sudo: None,
+            execute: None,
             metadata: Some(true),
         };
         assert!(params.validate().is_ok());
@@ -298,8 +308,8 @@ mod tests {
             pallet: Some("system".to_owned()),
             function: None,
             args: None,
-            suri: None,
             sudo: None,
+            execute: None,
             metadata: Some(true),
         };
         assert!(params.validate().is_ok());
@@ -312,8 +322,8 @@ mod tests {
             pallet: Some("system".to_owned()),
             function: Some("remark".to_owned()),
             args: Some(vec!["0x1234".to_owned()]),
-            suri: Some("//Alice".to_owned()),
             sudo: None,
+            execute: None,
             metadata: None,
         };
         assert!(params.validate().is_ok());
@@ -326,8 +336,8 @@ mod tests {
             pallet: None,
             function: None,
             args: None,
-            suri: None,
             sudo: None,
+            execute: None,
             metadata: Some(true),
         };
         let args = build_call_chain_args(&params);
@@ -350,8 +360,8 @@ mod tests {
             pallet: Some("System".to_owned()),
             function: None,
             args: None,
-            suri: None,
             sudo: None,
+            execute: None,
             metadata: Some(true),
         };
         let args = build_call_chain_args(&params);
@@ -378,8 +388,8 @@ mod tests {
             args: Some(vec![
                 "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY".to_owned()
             ]),
-            suri: None,
             sudo: None,
+            execute: None,
             metadata: None,
         };
         let args = build_call_chain_args(&params);
@@ -402,14 +412,14 @@ mod tests {
     }
 
     #[test]
-    fn build_args_transaction_with_sudo() {
+    fn build_args_transaction() {
         let params = CallChainParams {
             url: "ws://localhost:9944".to_owned(),
             pallet: Some("system".to_owned()),
             function: Some("remark".to_owned()),
             args: Some(vec!["0x1234".to_owned()]),
-            suri: Some("//Alice".to_owned()),
             sudo: Some(true),
+            execute: Some(true),
             metadata: None,
         };
         let args = build_call_chain_args(&params);
@@ -426,8 +436,6 @@ mod tests {
                 "remark",
                 "--args",
                 "0x1234",
-                "--suri",
-                "//Alice",
                 "--sudo",
                 "-y"
             ]
@@ -441,8 +449,8 @@ mod tests {
             pallet: Some("balances".to_owned()),
             function: Some("ExistentialDeposit".to_owned()),
             args: None,
-            suri: None,
             sudo: None,
+            execute: None,
             metadata: None,
         };
         let args = build_call_chain_args(&params);

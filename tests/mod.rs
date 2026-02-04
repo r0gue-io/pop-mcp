@@ -35,6 +35,50 @@ mod common {
 
     /// Default signer URI for test transactions.
     pub(crate) const DEFAULT_SURI: &str = "//Alice";
+    static PRIVATE_KEY_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    pub(crate) struct PrivateKeyGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        previous: Option<String>,
+    }
+
+    impl PrivateKeyGuard {
+        pub(crate) fn set() -> Self {
+            let lock = PRIVATE_KEY_LOCK
+                .get_or_init(|| Mutex::new(()))
+                .lock()
+                .expect("Failed to lock PRIVATE_KEY guard");
+            let previous = std::env::var("PRIVATE_KEY").ok();
+            std::env::set_var("PRIVATE_KEY", DEFAULT_SURI);
+            Self {
+                _lock: lock,
+                previous,
+            }
+        }
+
+        pub(crate) fn clear() -> Self {
+            let lock = PRIVATE_KEY_LOCK
+                .get_or_init(|| Mutex::new(()))
+                .lock()
+                .expect("Failed to lock PRIVATE_KEY guard");
+            let previous = std::env::var("PRIVATE_KEY").ok();
+            std::env::remove_var("PRIVATE_KEY");
+            Self {
+                _lock: lock,
+                previous,
+            }
+        }
+    }
+
+    impl Drop for PrivateKeyGuard {
+        fn drop(&mut self) {
+            if let Some(previous) = self.previous.take() {
+                std::env::set_var("PRIVATE_KEY", previous);
+            } else {
+                std::env::remove_var("PRIVATE_KEY");
+            }
+        }
+    }
 
     pub(crate) fn is_error(result: &CallToolResult) -> bool {
         result.is_error == Some(true)
@@ -300,7 +344,6 @@ mod common {
                     args: Some(args.to_string()),
                     value: None,
                     execute: Some(true),
-                    suri: Some(DEFAULT_SURI.to_string()),
                     url: Some(url.to_string()),
                 },
                 None,

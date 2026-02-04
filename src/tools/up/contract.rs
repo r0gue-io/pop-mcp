@@ -4,7 +4,7 @@ use rmcp::model::CallToolResult;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::error::PopMcpResult;
+use crate::error::{PopMcpError, PopMcpResult};
 use crate::executor::PopExecutor;
 use crate::tools::common::{error_result, success_result};
 
@@ -29,54 +29,46 @@ pub struct DeployContractParams {
     /// Whether to submit an extrinsic for on-chain execution.
     #[schemars(description = "Submit an extrinsic for on-chain execution")]
     pub execute: Option<bool>,
-    /// Secret key URI for signing.
-    #[schemars(description = "Secret key URI for signing")]
-    pub suri: Option<String>,
     /// WebSocket URL of the node.
     #[schemars(description = "WebSocket URL of the node")]
     pub url: Option<String>,
 }
 
 /// Build command arguments for deploy_contract
-fn build_deploy_contract_args<'a>(
-    params: &'a DeployContractParams,
-    stored_url: Option<&'a str>,
-) -> Vec<&'a str> {
-    let mut args = vec!["up", params.path.as_str(), "-y"];
+fn build_deploy_contract_args(
+    params: &DeployContractParams,
+    stored_url: Option<&str>,
+) -> Vec<String> {
+    let mut args = vec!["up".to_owned(), params.path.clone(), "-y".to_owned()];
 
     if let Some(ref constructor) = params.constructor {
-        args.push("--constructor");
-        args.push(constructor.as_str());
+        args.push("--constructor".to_owned());
+        args.push(constructor.clone());
     }
 
     if let Some(ref contract_args) = params.args {
-        args.push("--args");
+        args.push("--args".to_owned());
         for arg in contract_args.split_whitespace() {
-            args.push(arg);
+            args.push(arg.to_owned());
         }
     }
 
     if let Some(ref value) = params.value {
-        args.push("--value");
-        args.push(value.as_str());
+        args.push("--value".to_owned());
+        args.push(value.clone());
     }
 
     if params.execute.unwrap_or(false) {
-        args.push("--execute");
-    }
-
-    if let Some(ref suri) = params.suri {
-        args.push("--suri");
-        args.push(suri.as_str());
+        args.push("--execute".to_owned());
     }
 
     // Use provided URL or fall back to stored URL
     if let Some(ref url) = params.url {
-        args.push("--url");
-        args.push(url.as_str());
+        args.push("--url".to_owned());
+        args.push(url.clone());
     } else if let Some(url) = stored_url {
-        args.push("--url");
-        args.push(url);
+        args.push("--url".to_owned());
+        args.push(url.to_owned());
     }
 
     args
@@ -88,9 +80,23 @@ pub fn deploy_contract(
     params: DeployContractParams,
     stored_url: Option<&str>,
 ) -> PopMcpResult<CallToolResult> {
-    let args = build_deploy_contract_args(&params, stored_url);
+    // Read suri from PRIVATE_KEY environment variable
+    let suri = crate::read_private_key_suri();
+    if params.execute.unwrap_or(false) && suri.is_none() {
+        return Err(PopMcpError::InvalidInput(
+            "PRIVATE_KEY environment variable is required when execute=true".to_owned(),
+        ));
+    }
+    let mut args = build_deploy_contract_args(&params, stored_url);
+    if params.execute.unwrap_or(false) {
+        if let Some(suri) = suri {
+            args.push("--suri".to_owned());
+            args.push(suri);
+        }
+    }
+    let args_refs: Vec<&str> = args.iter().map(String::as_str).collect();
 
-    match executor.execute(&args) {
+    match executor.execute(&args_refs) {
         Ok(output) => Ok(success_result(output)),
         Err(e) => Ok(error_result(format!("Deployment failed:\n\n{}", e))),
     }
@@ -101,74 +107,73 @@ mod tests {
     use super::*;
 
     #[test]
-    fn build_args_variants() {
-        struct Case {
-            params: DeployContractParams,
-            stored_url: Option<&'static str>,
-            expected: Vec<&'static str>,
-        }
+    fn build_args_minimal() {
+        let params = DeployContractParams {
+            path: "./my_contract".to_owned(),
+            constructor: None,
+            args: None,
+            value: None,
+            execute: None,
+            url: None,
+        };
+        let args = build_deploy_contract_args(&params, None);
+        assert_eq!(
+            args,
+            vec!["up".to_owned(), "./my_contract".to_owned(), "-y".to_owned()]
+        );
+    }
 
-        let cases = vec![
-            Case {
-                params: DeployContractParams {
-                    path: "./my_contract".to_owned(),
-                    constructor: None,
-                    args: None,
-                    value: None,
-                    execute: None,
-                    suri: None,
-                    url: None,
-                },
-                stored_url: None,
-                expected: vec!["up", "./my_contract", "-y"],
-            },
-            Case {
-                params: DeployContractParams {
-                    path: "./my_contract".to_owned(),
-                    constructor: Some("new".to_owned()),
-                    args: Some("100 true".to_owned()),
-                    value: Some("1000".to_owned()),
-                    execute: Some(true),
-                    suri: Some("//Alice".to_owned()),
-                    url: Some("ws://explicit:9944".to_owned()),
-                },
-                stored_url: Some("ws://stored:9944"),
-                expected: vec![
-                    "up",
-                    "./my_contract",
-                    "-y",
-                    "--constructor",
-                    "new",
-                    "--args",
-                    "100",
-                    "true",
-                    "--value",
-                    "1000",
-                    "--execute",
-                    "--suri",
-                    "//Alice",
-                    "--url",
-                    "ws://explicit:9944",
-                ],
-            },
-            Case {
-                params: DeployContractParams {
-                    path: "./my_contract".to_owned(),
-                    constructor: None,
-                    args: None,
-                    value: None,
-                    execute: None,
-                    suri: None,
-                    url: None,
-                },
-                stored_url: Some("ws://stored:9944"),
-                expected: vec!["up", "./my_contract", "-y", "--url", "ws://stored:9944"],
-            },
-        ];
+    #[test]
+    fn build_args_with_execute() {
+        let params = DeployContractParams {
+            path: "./my_contract".to_owned(),
+            constructor: Some("new".to_owned()),
+            args: Some("100 true".to_owned()),
+            value: Some("1000".to_owned()),
+            execute: Some(true),
+            url: Some("ws://localhost:9944".to_owned()),
+        };
+        let args = build_deploy_contract_args(&params, None);
+        assert_eq!(
+            args,
+            vec![
+                "up".to_owned(),
+                "./my_contract".to_owned(),
+                "-y".to_owned(),
+                "--constructor".to_owned(),
+                "new".to_owned(),
+                "--args".to_owned(),
+                "100".to_owned(),
+                "true".to_owned(),
+                "--value".to_owned(),
+                "1000".to_owned(),
+                "--execute".to_owned(),
+                "--url".to_owned(),
+                "ws://localhost:9944".to_owned(),
+            ]
+        );
+    }
 
-        for case in cases {
-            let args = build_deploy_contract_args(&case.params, case.stored_url);
-            assert_eq!(args, case.expected);
-        }
+    #[test]
+    fn build_args_uses_stored_url_fallback() {
+        let params = DeployContractParams {
+            path: "./my_contract".to_owned(),
+            constructor: None,
+            args: None,
+            value: None,
+            execute: None,
+            url: None,
+        };
+        let args = build_deploy_contract_args(&params, Some("ws://stored:9944"));
+        assert_eq!(
+            args,
+            vec![
+                "up".to_owned(),
+                "./my_contract".to_owned(),
+                "-y".to_owned(),
+                "--url".to_owned(),
+                "ws://stored:9944".to_owned()
+            ]
+        );
     }
 }

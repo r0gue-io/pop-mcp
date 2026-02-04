@@ -418,6 +418,13 @@ Deploys and instantiates a contract.
 Signing:
 - Set `PRIVATE_KEY` in the environment to a dev key URI (e.g. `//Alice`) when `execute=true`.
 
+MCP client config example (recommended):
+
+```toml
+[mcp_servers.pop-mcp.env]
+PRIVATE_KEY = "//Alice"
+```
+
 #### call_contract
 Calls a method on a deployed contract.
 
@@ -435,6 +442,18 @@ Calls a method on a deployed contract.
 
 Signing:
 - Set `PRIVATE_KEY` in the environment to a dev key URI (e.g. `//Alice`) when `execute=true`.
+
+MCP client config example (recommended):
+
+```toml
+[mcp_servers.pop-mcp.env]
+PRIVATE_KEY = "//Alice"
+```
+
+Security note:
+- Use dev keys only for local networks.
+- Prefer environment variables set in the MCP client config over CLI arguments.
+- Avoid logging or echoing secrets in tooling output.
 
 ### Network Tools
 

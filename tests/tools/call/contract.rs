@@ -1,6 +1,7 @@
 use crate::common::{is_error, is_success, text, Contract, InkNode, PrivateKeyGuard, TestEnv};
 use anyhow::Result;
 use pop_mcp_server::tools::call::contract::{call_contract, CallContractParams};
+use pop_mcp_server::PopMcpError;
 
 #[test]
 fn call_contract_nonexistent_path_fails() -> Result<()> {
@@ -78,5 +79,30 @@ fn call_contract_get_and_flip_mutates_state() -> Result<()> {
     assert!(is_success(&get_result));
     assert!(text(&get_result)?.contains("true"));
 
+    Ok(())
+}
+
+#[test]
+fn call_contract_execute_requires_private_key() -> Result<()> {
+    let _guard = PrivateKeyGuard::clear();
+
+    let err = call_contract(
+        TestEnv::new()?.executor(),
+        CallContractParams {
+            path: "dummy_contract".to_string(),
+            contract: "0x1234".to_string(),
+            message: "flip".to_string(),
+            args: None,
+            value: None,
+            execute: Some(true),
+            url: Some("ws://localhost:9944".to_string()),
+        },
+    )
+    .unwrap_err();
+
+    let PopMcpError::InvalidInput(message) = err else {
+        panic!("expected InvalidInput error when PRIVATE_KEY is missing");
+    };
+    assert!(message.contains("PRIVATE_KEY"));
     Ok(())
 }

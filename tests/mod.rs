@@ -55,6 +55,19 @@ mod common {
                 previous,
             }
         }
+
+        pub(crate) fn clear() -> Self {
+            let lock = PRIVATE_KEY_LOCK
+                .get_or_init(|| Mutex::new(()))
+                .lock()
+                .expect("Failed to lock PRIVATE_KEY guard");
+            let previous = std::env::var("PRIVATE_KEY").ok();
+            std::env::remove_var("PRIVATE_KEY");
+            Self {
+                _lock: lock,
+                previous,
+            }
+        }
     }
 
     impl Drop for PrivateKeyGuard {
@@ -321,7 +334,6 @@ mod common {
 
         /// Deploy to shared ink-node.
         pub(crate) fn deploy(&mut self, url: &str, constructor: &str, args: &str) -> Result<()> {
-            let _guard = PrivateKeyGuard::set();
             let executor = PopExecutor::new();
 
             let result = deploy_contract(

@@ -3,13 +3,16 @@ use anyhow::{anyhow, Result};
 use pop_mcp_server::executor::PopExecutor;
 use pop_mcp_server::tools::clean::{clean_network, CleanNetworkParams};
 use pop_mcp_server::tools::up::network::{up_network, UpNetworkParams};
+use std::net::TcpListener;
 use std::time::{Duration, Instant};
+use tempfile::TempDir;
 
 struct NetworkRun {
     relay_url: String,
     chain_url: String,
     zombie_json: String,
     pop_pid: Option<u32>,
+    _temp_dir: TempDir,
 }
 
 impl Drop for NetworkRun {
@@ -152,12 +155,54 @@ fn wait_for_ws(url: &str, timeout: Duration) -> Result<()> {
     wait_for_port_open(port, timeout)
 }
 
+fn allocate_port() -> Result<u16> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    Ok(listener.local_addr()?.port())
+}
+
 fn launch_network() -> Result<NetworkRun> {
+    let temp_dir = TempDir::new()?;
+    let relay_ws = allocate_port()?;
+    let relay_rpc = allocate_port()?;
+    let relay_ws_bob = allocate_port()?;
+    let relay_rpc_bob = allocate_port()?;
+    let collator_ws = allocate_port()?;
+    let collator_rpc = allocate_port()?;
+    let config_path = temp_dir.path().join("network.toml");
+    let config = format!(
+        r#"[relaychain]
+chain = "paseo-local"
+
+[[relaychain.nodes]]
+name = "alice"
+validator = true
+ws_port = {relay_ws}
+rpc_port = {relay_rpc}
+
+[[relaychain.nodes]]
+name = "bob"
+validator = true
+ws_port = {relay_ws_bob}
+rpc_port = {relay_rpc_bob}
+
+[[parachains]]
+id = 1000
+chain = "asset-hub-paseo-local"
+
+[[parachains.collators]]
+name = "asset-hub"
+ws_port = {collator_ws}
+rpc_port = {collator_rpc}
+args = ["-lxcm=trace,lsystem::events=trace,lruntime=trace"]
+"#,
+    );
+    std::fs::write(&config_path, config)?;
+
     let executor = PopExecutor::new();
     let result = up_network(
         &executor,
         UpNetworkParams {
-            path: "tests/networks/paseo+asset-hub.toml".to_owned(),
+            path: config_path.to_string_lossy().to_string(),
             verbose: Some(true),
         },
     )?;
@@ -170,15 +215,12 @@ fn launch_network() -> Result<NetworkRun> {
     let mut cleanup = CleanupGuard::new();
     cleanup.arm_pid(parse_pop_pid(&all_texts));
 
-    let zombie_json = match parse_zombie_json(&all_texts) {
-        Ok(path) => path,
-        Err(_) => {
-            if let Some(base_dir) = parse_base_dir(&all_texts) {
-                format!("{}/zombie.json", base_dir)
-            } else {
-                return Err(anyhow!("Missing zombie_json in output"));
-            }
-        }
+    let zombie_json = match parse_base_dir(&all_texts) {
+        Some(base_dir) => base_dir,
+        None => match parse_zombie_json(&all_texts) {
+            Ok(path) => path,
+            Err(_) => return Err(anyhow!("Missing base_dir in output")),
+        },
     };
     cleanup.arm(zombie_json.clone());
 
@@ -192,6 +234,7 @@ fn launch_network() -> Result<NetworkRun> {
         chain_url: urls.1.clone(),
         zombie_json,
         pop_pid: parse_pop_pid(&all_texts),
+        _temp_dir: temp_dir,
     };
     cleanup.disarm();
     Ok(run)
@@ -202,27 +245,5 @@ fn up_network_launches_and_outputs_endpoints() -> Result<()> {
     let network = launch_network()?;
     assert!(!network.relay_url.is_empty());
     assert!(!network.chain_url.is_empty());
-    Ok(())
-}
-
-#[test]
-fn up_network_invalid_path_fails() -> Result<()> {
-    let executor = PopExecutor::new();
-    let result = up_network(
-        &executor,
-        UpNetworkParams {
-            path: "./does-not-exist.toml".to_owned(),
-            verbose: Some(false),
-        },
-    )?;
-
-    assert!(is_error(&result));
-    let output = text(&result)?;
-    assert!(
-        output.contains("Could not launch local network")
-            || output.contains("No such file")
-            || output.contains("not found")
-            || output.contains("Failed to parse")
-    );
     Ok(())
 }

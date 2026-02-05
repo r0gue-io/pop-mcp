@@ -46,7 +46,7 @@ impl CleanNetworkParams {
 }
 
 fn build_clean_network_args(params: &CleanNetworkParams) -> Vec<String> {
-    let mut args = vec!["clean".to_owned(), "network".to_owned(), "-y".to_owned()];
+    let mut args = vec!["clean".to_owned(), "network".to_owned()];
 
     if params.all.unwrap_or(false) {
         args.push("--all".to_owned());
@@ -158,7 +158,6 @@ mod tests {
             vec![
                 "clean".to_owned(),
                 "network".to_owned(),
-                "-y".to_owned(),
                 "--keep-state".to_owned(),
                 "/tmp/zombie.json".to_owned()
             ]
@@ -175,12 +174,7 @@ mod tests {
         let args = build_clean_network_args(&params);
         assert_eq!(
             args,
-            vec![
-                "clean".to_owned(),
-                "network".to_owned(),
-                "-y".to_owned(),
-                "--all".to_owned()
-            ]
+            vec!["clean".to_owned(), "network".to_owned(), "--all".to_owned()]
         );
     }
 }

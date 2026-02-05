@@ -9,6 +9,7 @@ struct NetworkRun {
     relay_url: String,
     chain_url: String,
     zombie_json: String,
+    pop_pid: Option<u32>,
 }
 
 impl Drop for NetworkRun {
@@ -22,24 +23,39 @@ impl Drop for NetworkRun {
                 keep_state: Some(false),
             },
         );
+        if let Some(pid) = self.pop_pid.take() {
+            let _ = std::process::Command::new("kill")
+                .arg("-TERM")
+                .arg(pid.to_string())
+                .status();
+        }
     }
 }
 
 struct CleanupGuard {
     zombie_json: Option<String>,
+    pop_pid: Option<u32>,
 }
 
 impl CleanupGuard {
     fn new() -> Self {
-        Self { zombie_json: None }
+        Self {
+            zombie_json: None,
+            pop_pid: None,
+        }
     }
 
     fn arm(&mut self, zombie_json: String) {
         self.zombie_json = Some(zombie_json);
     }
 
+    fn arm_pid(&mut self, pop_pid: Option<u32>) {
+        self.pop_pid = pop_pid;
+    }
+
     fn disarm(&mut self) {
         self.zombie_json = None;
+        self.pop_pid = None;
     }
 }
 
@@ -55,6 +71,12 @@ impl Drop for CleanupGuard {
                     keep_state: Some(false),
                 },
             );
+        }
+        if let Some(pid) = self.pop_pid.take() {
+            let _ = std::process::Command::new("kill")
+                .arg("-TERM")
+                .arg(pid.to_string())
+                .status();
         }
     }
 }
@@ -103,6 +125,17 @@ fn parse_base_dir(texts: &[String]) -> Option<String> {
     None
 }
 
+fn parse_pop_pid(texts: &[String]) -> Option<u32> {
+    for text in texts {
+        let trimmed = text.trim();
+        if let Some(rest) = trimmed.strip_prefix("pop_pid:") {
+            let pid = rest.trim().parse::<u32>().ok()?;
+            return Some(pid);
+        }
+    }
+    None
+}
+
 fn wait_for_port_open(port: u16, timeout: Duration) -> Result<()> {
     let start = Instant::now();
     while start.elapsed() < timeout {
@@ -135,6 +168,7 @@ fn launch_network() -> Result<NetworkRun> {
 
     let all_texts = texts(&result);
     let mut cleanup = CleanupGuard::new();
+    cleanup.arm_pid(parse_pop_pid(&all_texts));
 
     let zombie_json = match parse_zombie_json(&all_texts) {
         Ok(path) => path,
@@ -157,6 +191,7 @@ fn launch_network() -> Result<NetworkRun> {
         relay_url: urls.0.clone(),
         chain_url: urls.1.clone(),
         zombie_json,
+        pop_pid: parse_pop_pid(&all_texts),
     };
     cleanup.disarm();
     Ok(run)

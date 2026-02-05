@@ -7,6 +7,8 @@ use rmcp::model::{CallToolResult, Content};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::path::Path;
+use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -34,48 +36,13 @@ impl UpNetworkParams {
 
 /// Build command arguments for up_network.
 fn build_up_network_args(params: &UpNetworkParams) -> Vec<&str> {
-    let mut args = vec!["up", "network", params.path.as_str(), "--detach", "-y"];
+    let mut args = vec!["up", "network", params.path.as_str(), "-y"];
 
     if params.verbose.unwrap_or(false) {
         args.push("--verbose");
     }
 
     args
-}
-
-/// Parse the output to extract zombie.json path.
-fn parse_zombie_json(output: &str) -> Option<String> {
-    for line in output.lines() {
-        let trimmed = line.trim().trim_start_matches('│').trim();
-        if let Some(index) = trimmed.find("zombie.json:") {
-            let rest = &trimmed[index + "zombie.json:".len()..];
-            let path = rest.trim();
-            if !path.is_empty() {
-                return Some(path.to_owned());
-            }
-        }
-    }
-    None
-}
-
-/// Parse the output to extract base dir path.
-fn parse_base_dir(output: &str) -> Option<String> {
-    for line in output.lines() {
-        let trimmed = line.trim().trim_start_matches('│').trim();
-        if let Some(index) = trimmed.find("base dir:") {
-            let rest = &trimmed[index + "base dir:".len()..];
-            let path = rest.trim();
-            if !path.is_empty() {
-                return Some(path.to_owned());
-            }
-        }
-    }
-    None
-}
-
-fn resolve_zombie_json(output: &str) -> Option<String> {
-    parse_zombie_json(output)
-        .or_else(|| parse_base_dir(output).map(|base_dir| format!("{}/zombie.json", base_dir)))
 }
 
 fn read_ws_endpoints(zombie_json: &str) -> Result<(String, String), PopMcpError> {
@@ -158,9 +125,97 @@ fn read_ws_endpoints_with_retry(zombie_json: &str) -> Result<(String, String), P
             Ok(result) => return Ok(result),
             Err(err) => {
                 if start.elapsed() >= timeout {
-                    return Err(err);
+                    return Err(PopMcpError::CommandExecution(format!(
+                        "Timed out waiting for zombie.json to be readable/valid: {}",
+                        err
+                    )));
                 }
             }
+        }
+        thread::sleep(Duration::from_millis(200));
+    }
+}
+
+fn find_zombie_json() -> Option<String> {
+    let temp_dir = std::env::temp_dir();
+    let entries = fs::read_dir(&temp_dir).ok()?;
+    let mut newest: Option<(std::time::SystemTime, String)> = None;
+    for entry in entries.flatten() {
+        let file_type = entry.file_type().ok()?;
+        if !file_type.is_dir() {
+            continue;
+        }
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if !name.starts_with("zombie-") {
+            continue;
+        }
+        let zombie_json = entry.path().join("zombie.json");
+        if zombie_json.is_file() {
+            let modified = entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .unwrap_or_else(|_| std::time::SystemTime::UNIX_EPOCH);
+            let path = zombie_json.to_string_lossy().to_string();
+            match newest {
+                None => newest = Some((modified, path)),
+                Some((current, _)) if modified > current => newest = Some((modified, path)),
+                Some(_) => {}
+            }
+        }
+    }
+    newest.map(|(_, path)| path)
+}
+
+fn execute_up_network(args: &[&str]) -> Result<(String, u32, String), PopMcpError> {
+    let mut cmd = Command::new(crate::executor::resolve_pop_command());
+    cmd.args(args);
+
+    let temp_name = format!(
+        "pop-mcp-up-network-{}.log",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_else(|_| Duration::from_nanos(0))
+            .as_nanos()
+    );
+    let temp_path = std::env::temp_dir().join(temp_name);
+    let file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&temp_path)
+        .map_err(|e| PopMcpError::CommandExecution(format!("Failed to open log file: {}", e)))?;
+    let file_clone = file
+        .try_clone()
+        .map_err(|e| PopMcpError::CommandExecution(format!("Failed to clone log file: {}", e)))?;
+
+    cmd.stdout(Stdio::from(file_clone));
+    cmd.stderr(Stdio::from(file));
+
+    let mut child = cmd.spawn().map_err(|e| {
+        PopMcpError::CommandExecution(format!("Failed to execute pop command: {}", e))
+    })?;
+    let pid = child.id();
+
+    let timeout = Duration::from_secs(300);
+    let start = Instant::now();
+    let mut output;
+    loop {
+        output = fs::read_to_string(&temp_path).unwrap_or_default();
+        if output.contains("Could not launch local network") {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(PopMcpError::CommandExecution(output));
+        }
+        if let Some(zombie_json) = find_zombie_json() {
+            std::mem::forget(child);
+            return Ok((output, pid, zombie_json));
+        }
+        if start.elapsed() >= timeout {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(PopMcpError::CommandExecution(
+                "Timed out waiting for network output".to_owned(),
+            ));
         }
         thread::sleep(Duration::from_millis(200));
     }
@@ -169,27 +224,30 @@ fn read_ws_endpoints_with_retry(zombie_json: &str) -> Result<(String, String), P
 /// Execute up_network tool (pop up network).
 ///
 /// Returns the output plus parsed zombie.json path for cleanup.
-pub fn up_network(executor: &PopExecutor, params: UpNetworkParams) -> PopMcpResult<CallToolResult> {
+pub fn up_network(
+    _executor: &PopExecutor,
+    params: UpNetworkParams,
+) -> PopMcpResult<CallToolResult> {
     params.validate().map_err(PopMcpError::InvalidInput)?;
 
     let args = build_up_network_args(&params);
-    match executor.execute(&args) {
-        Ok(output) => {
-            let zombie_json = match resolve_zombie_json(&output) {
-                Some(path) => path,
-                None => return Ok(error_result("Failed to parse zombie.json path from output")),
-            };
+    match execute_up_network(&args) {
+        Ok((output, pop_pid, zombie_json)) => {
             let (relay_ws, chain_ws) = match read_ws_endpoints_with_retry(&zombie_json) {
                 Ok(endpoints) => endpoints,
                 Err(err) => return Ok(error_result(err.to_string())),
             };
             let mut content = vec![Content::text(output.clone())];
-            if let Some(base_dir) = parse_base_dir(&output) {
+            if let Some(base_dir) = Path::new(&zombie_json)
+                .parent()
+                .map(|p| p.to_string_lossy().to_string())
+            {
                 content.push(Content::text(format!("base_dir: {}", base_dir)));
             }
             content.push(Content::text(format!("zombie_json: {}", zombie_json)));
             content.push(Content::text(format!("relay_ws: {}", relay_ws)));
             content.push(Content::text(format!("chain_ws: {}", chain_ws)));
+            content.push(Content::text(format!("pop_pid: {}", pop_pid)));
             Ok(CallToolResult::success(content))
         }
         Err(e) => Ok(error_result(e.to_string())),
@@ -227,10 +285,7 @@ mod tests {
             verbose: None,
         };
         let args = build_up_network_args(&params);
-        assert_eq!(
-            args,
-            vec!["up", "network", "./network.toml", "--detach", "-y"]
-        );
+        assert_eq!(args, vec!["up", "network", "./network.toml", "-y"]);
     }
 
     #[test]
@@ -242,54 +297,8 @@ mod tests {
         let args = build_up_network_args(&params);
         assert_eq!(
             args,
-            vec![
-                "up",
-                "network",
-                "./network.toml",
-                "--detach",
-                "-y",
-                "--verbose"
-            ]
+            vec!["up", "network", "./network.toml", "-y", "--verbose"]
         );
-    }
-
-    #[test]
-    fn parse_zombie_json_extracts_path() {
-        let output = r#"
-│  base dir: /tmp/zombie-abc
-│  zombie.json: /tmp/zombie-abc/zombie.json
-"#;
-        let path = parse_zombie_json(output);
-        assert_eq!(path, Some("/tmp/zombie-abc/zombie.json".to_owned()));
-    }
-
-    #[test]
-    fn parse_base_dir_extracts_path() {
-        let output = r#"
-│  base dir: /tmp/zombie-xyz
-│  zombie.json: /tmp/zombie-xyz/zombie.json
-"#;
-        let path = parse_base_dir(output);
-        assert_eq!(path, Some("/tmp/zombie-xyz".to_owned()));
-    }
-
-    #[test]
-    fn resolve_zombie_json_prefers_explicit_path() {
-        let output = r#"
-│  base dir: /tmp/zombie-aaa
-│  zombie.json: /tmp/zombie-aaa/zombie.json
-"#;
-        let path = resolve_zombie_json(output);
-        assert_eq!(path, Some("/tmp/zombie-aaa/zombie.json".to_owned()));
-    }
-
-    #[test]
-    fn resolve_zombie_json_from_base_dir_when_missing() {
-        let output = r#"
-│  base dir: /tmp/zombie-bbb
-"#;
-        let path = resolve_zombie_json(output);
-        assert_eq!(path, Some("/tmp/zombie-bbb/zombie.json".to_owned()));
     }
 
     #[test]

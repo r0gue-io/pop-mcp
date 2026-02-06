@@ -2,7 +2,7 @@
 
 #[cfg(feature = "pop-e2e")]
 use std::path::PathBuf;
-use std::{ffi::OsString, process::Command};
+use std::process::Command;
 
 use crate::error::{PopMcpError, PopMcpResult};
 
@@ -64,7 +64,7 @@ impl PopExecutor {
     }
 
     fn execute_raw(&self, args: &[&str]) -> PopMcpResult<CommandOutput> {
-        let mut cmd = Command::new(resolve_pop_command());
+        let mut cmd = Command::new("pop");
         cmd.args(args);
 
         #[cfg(feature = "pop-e2e")]
@@ -107,16 +107,6 @@ impl PopExecutor {
             Err(PopMcpError::CommandExecution(error))
         }
     }
-}
-
-pub(crate) fn resolve_pop_command() -> OsString {
-    if let Ok(cwd) = std::env::current_dir() {
-        let candidate = cwd.join("bin").join("pop");
-        if candidate.is_file() {
-            return candidate.into_os_string();
-        }
-    }
-    OsString::from("pop")
 }
 
 #[cfg(test)]

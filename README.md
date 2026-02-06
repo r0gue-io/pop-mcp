@@ -1,10 +1,89 @@
 # Pop MCP Server
 
-MCP server for Polkadot development with [Pop CLI](https://github.com/r0gue-io/pop-cli). Smart contracts, parachains, chain interaction, and documentation — through your AI assistant.
+MCP server for Polkadot development with [Pop CLI](https://github.com/r0gue-io/pop-cli). Smart contract (ink!) and chain (Polkadot SDK) interaction with your AI assistant.
 
-**Source Code**: [https://github.com/r0gue-io/pop-mcp](https://github.com/r0gue-io/pop-mcp)
+## Setup
 
-## Installation
+### Prerequisites
+
+- Pop CLI works on your machine:
+
+```bash
+pop --version
+```
+
+If needed, install from the official docs:
+`https://learn.onpop.io/v/cli/installing-pop-cli`
+
+### Build Pop MCP
+
+```bash
+git clone https://github.com/r0gue-io/pop-mcp.git
+cd pop-mcp
+cargo build --release
+```
+
+### Claude Code (CLI)
+
+Add the server (project scope). This creates/updates `.mcp.json`:
+
+```bash
+claude mcp add pop-mcp --scope project --env PRIVATE_KEY=//Alice -- /absolute/path/to/pop-mcp/target/release/pop-mcp-server
+```
+
+Verify:
+
+```bash
+claude mcp get pop-mcp
+```
+
+### Codex CLI
+
+Config is stored in `~/.codex/config.toml` (or project `.codex/config.toml`).
+
+Add the server:
+
+```bash
+codex mcp add pop-mcp --env PRIVATE_KEY=//Alice -- /absolute/path/to/pop-mcp/target/release/pop-mcp-server
+```
+
+Verify:
+
+```bash
+codex mcp list
+```
+
+### Verify Pop MCP
+
+In Claude Code or Codex, call:
+
+```
+check_pop_installation
+```
+
+Expected: Pop CLI version is returned.
+
+### Notes
+
+- `PRIVATE_KEY` is only required for signing transactions. Read-only calls work without it. Use dev keys (`//Alice`, `//Bob`) for local networks only.
+- You do not run the MCP server manually; the client launches it.
+
+### Switching Keys
+
+Use the same server name (`pop-mcp`) when you update the key.
+
+Claude Code:
+
+```bash
+claude mcp add pop-mcp --scope project --env PRIVATE_KEY=//Bob -- /absolute/path/to/pop-mcp/target/release/pop-mcp-server
+```
+
+Codex CLI:
+
+```bash
+codex mcp add pop-mcp --env PRIVATE_KEY=//Bob -- /absolute/path/to/pop-mcp/target/release/pop-mcp-server
+```
+## Installation (Optional)
 
 ### Pre-built Binary
 
@@ -26,81 +105,6 @@ Optionally move to your PATH:
 ```bash
 sudo mv pop-mcp-server-* /usr/local/bin/pop-mcp-server
 ```
-
-### Build from Source
-
-```bash
-git clone https://github.com/r0gue-io/pop-mcp.git
-cd pop-mcp
-cargo build --release
-# Binary: target/release/pop-mcp-server
-```
-
-## Configuration
-
-Replace `/path/to/pop-mcp-server` with the actual path to your binary, or just `pop-mcp-server` if it's in your PATH.
-
-`PRIVATE_KEY` is used to sign on-chain transactions (deploy, call, transfer). Use dev keys (`//Alice`, `//Bob`) for local networks only. Never use keys with mainnet funds.
-
-### Claude Desktop
-
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "pop-mcp": {
-      "type": "stdio",
-      "command": "/path/to/pop-mcp-server",
-      "args": [],
-      "env": {
-        "PRIVATE_KEY": "//Alice"
-      }
-    }
-  }
-}
-```
-
-### Claude Code
-
-Global (`~/.claude.json`) or project-specific (`.mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "pop-mcp": {
-      "type": "stdio",
-      "command": "/path/to/pop-mcp-server",
-      "args": [],
-      "env": {
-        "PRIVATE_KEY": "//Alice"
-      }
-    }
-  }
-}
-```
-
-### Cursor
-
-**Settings** > **Tools & MCP** > **Add new MCP Server**:
-
-```json
-{
-  "pop-mcp": {
-    "type": "stdio",
-    "command": "/path/to/pop-mcp-server",
-    "args": [],
-    "env": {
-      "PRIVATE_KEY": "//Alice"
-    }
-  }
-}
-```
-
-### Other MCP Clients
-
-Provide `command: "pop-mcp-server"` (or full path) with `args: []` and set `PRIVATE_KEY` in `env`.
 
 ## Resources
 

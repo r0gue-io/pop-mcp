@@ -28,6 +28,12 @@ pub struct UpNetworkParams {
     #[schemars(description = "Whether the output should be verbose (default: false)")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub verbose: Option<bool>,
+    /// Parachain(s) to include (comma-separated). Example: ["asset-hub"] or ["asset-hub#1000:9944"].
+    #[schemars(
+        description = "Parachain(s) to include (comma-separated). Example: [\"asset-hub\"] or [\"asset-hub#1000:9944\"]"
+    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parachain: Option<Vec<String>>,
 }
 
 impl UpNetworkParams {
@@ -36,6 +42,15 @@ impl UpNetworkParams {
     /// - Exactly one of `path` or `chain` must be provided.
     /// - If `chain` is provided, it must be one of the known chains (case-insensitive).
     fn validate(&self) -> Result<(), String> {
+        if let Some(parachains) = &self.parachain {
+            if parachains.is_empty() {
+                return Err("Parachain list cannot be empty".to_owned());
+            }
+            if parachains.iter().any(|p| p.trim().is_empty()) {
+                return Err("Parachain entries cannot be empty".to_owned());
+            }
+        }
+
         match (&self.path, &self.chain) {
             (Some(p), None) => {
                 if p.trim().is_empty() {
@@ -79,7 +94,7 @@ enum UpMode<'a> {
 fn build_up_network_args<'a>(
     params: &'a UpNetworkParams,
     chain_normalized: &'a Option<String>,
-) -> Vec<&'a str> {
+) -> Vec<String> {
     let mode = if let Some(ref path) = params.path {
         UpMode::Network(path.as_str())
     } else if let Some(ref chain) = chain_normalized {
@@ -89,12 +104,29 @@ fn build_up_network_args<'a>(
     };
 
     let mut args = match mode {
-        UpMode::Network(path) => vec!["up", "network", path, "-y", "--detach"],
-        UpMode::Chain(chain) => vec!["up", chain, "-y", "--detach"],
+        UpMode::Network(path) => vec![
+            "up".to_string(),
+            "network".to_string(),
+            path.to_string(),
+            "-y".to_string(),
+            "--detach".to_string(),
+        ],
+        UpMode::Chain(chain) => vec![
+            "up".to_string(),
+            chain.to_string(),
+            "-y".to_string(),
+            "--detach".to_string(),
+        ],
     };
 
+    if let Some(parachains) = &params.parachain {
+        let joined = parachains.join(",");
+        args.push("--parachain".to_string());
+        args.push(joined);
+    }
+
     if params.verbose.unwrap_or(false) {
-        args.push("--verbose");
+        args.push("--verbose".to_string());
     }
 
     args
@@ -109,7 +141,8 @@ pub fn up_network(executor: &PopExecutor, params: UpNetworkParams) -> PopMcpResu
 
     let chain_normalized = params.normalized_chain();
     let args = build_up_network_args(&params, &chain_normalized);
-    match executor.execute(&args) {
+    let args_ref: Vec<&str> = args.iter().map(String::as_str).collect();
+    match executor.execute(&args_ref) {
         Ok(output) => Ok(success_result(output)),
         Err(e) => Ok(error_result(e.to_string())),
     }
@@ -127,6 +160,7 @@ mod tests {
             path: Some("  ".to_owned()),
             chain: None,
             verbose: None,
+            parachain: None,
         };
         assert!(params.validate().is_err());
     }
@@ -137,6 +171,7 @@ mod tests {
             path: Some("./network.toml".to_owned()),
             chain: None,
             verbose: None,
+            parachain: None,
         };
         assert!(params.validate().is_ok());
     }
@@ -148,6 +183,7 @@ mod tests {
                 path: None,
                 chain: Some(chain.to_string()),
                 verbose: None,
+                parachain: None,
             };
             assert!(params.validate().is_ok(), "should accept chain '{}'", chain);
         }
@@ -159,6 +195,7 @@ mod tests {
             path: None,
             chain: Some("PASEO".to_owned()),
             verbose: None,
+            parachain: None,
         };
         assert!(params.validate().is_ok());
 
@@ -166,6 +203,7 @@ mod tests {
             path: None,
             chain: Some("Kusama".to_owned()),
             verbose: None,
+            parachain: None,
         };
         assert!(params.validate().is_ok());
     }
@@ -176,6 +214,7 @@ mod tests {
             path: None,
             chain: Some("unknown".to_owned()),
             verbose: None,
+            parachain: None,
         };
         assert!(params.validate().is_err());
     }
@@ -186,6 +225,7 @@ mod tests {
             path: Some("./network.toml".to_owned()),
             chain: Some("paseo".to_owned()),
             verbose: None,
+            parachain: None,
         };
         assert!(params.validate().is_err());
     }
@@ -196,8 +236,45 @@ mod tests {
             path: None,
             chain: None,
             verbose: None,
+            parachain: None,
         };
         assert!(params.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_empty_parachain_list() {
+        let params = UpNetworkParams {
+            path: None,
+            chain: Some("paseo".to_owned()),
+            verbose: None,
+            parachain: Some(vec![]),
+        };
+        assert!(params.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_blank_parachain_entry() {
+        let params = UpNetworkParams {
+            path: None,
+            chain: Some("paseo".to_owned()),
+            verbose: None,
+            parachain: Some(vec![" ".to_string()]),
+        };
+        assert!(params.validate().is_err());
+    }
+
+    #[test]
+    fn validate_accepts_parachain_entries() {
+        let params = UpNetworkParams {
+            path: None,
+            chain: Some("paseo".to_owned()),
+            verbose: None,
+            parachain: Some(vec![
+                "asset-hub".to_string(),
+                "asset-hub#1000:9944".to_string(),
+            ]),
+        };
+        assert!(params.validate().is_ok());
     }
 
     // Build args tests
@@ -208,12 +285,19 @@ mod tests {
             path: Some("./network.toml".to_owned()),
             chain: None,
             verbose: None,
+            parachain: None,
         };
         let chain_normalized = params.normalized_chain();
         let args = build_up_network_args(&params, &chain_normalized);
         assert_eq!(
             args,
-            vec!["up", "network", "./network.toml", "-y", "--detach"]
+            vec![
+                "up".to_string(),
+                "network".to_string(),
+                "./network.toml".to_string(),
+                "-y".to_string(),
+                "--detach".to_string()
+            ]
         );
     }
 
@@ -223,10 +307,19 @@ mod tests {
             path: None,
             chain: Some("PASEO".to_owned()),
             verbose: None,
+            parachain: None,
         };
         let chain_normalized = params.normalized_chain();
         let args = build_up_network_args(&params, &chain_normalized);
-        assert_eq!(args, vec!["up", "paseo", "-y", "--detach"]);
+        assert_eq!(
+            args,
+            vec![
+                "up".to_string(),
+                "paseo".to_string(),
+                "-y".to_string(),
+                "--detach".to_string()
+            ]
+        );
     }
 
     #[test]
@@ -235,18 +328,19 @@ mod tests {
             path: Some("./network.toml".to_owned()),
             chain: None,
             verbose: Some(true),
+            parachain: None,
         };
         let chain_normalized = params.normalized_chain();
         let args = build_up_network_args(&params, &chain_normalized);
         assert_eq!(
             args,
             vec![
-                "up",
-                "network",
-                "./network.toml",
-                "-y",
-                "--detach",
-                "--verbose"
+                "up".to_string(),
+                "network".to_string(),
+                "./network.toml".to_string(),
+                "-y".to_string(),
+                "--detach".to_string(),
+                "--verbose".to_string()
             ]
         );
     }
@@ -257,9 +351,66 @@ mod tests {
             path: None,
             chain: Some("kusama".to_owned()),
             verbose: Some(true),
+            parachain: None,
         };
         let chain_normalized = params.normalized_chain();
         let args = build_up_network_args(&params, &chain_normalized);
-        assert_eq!(args, vec!["up", "kusama", "-y", "--detach", "--verbose"]);
+        assert_eq!(
+            args,
+            vec![
+                "up".to_string(),
+                "kusama".to_string(),
+                "-y".to_string(),
+                "--detach".to_string(),
+                "--verbose".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn build_args_with_parachain_for_chain() {
+        let params = UpNetworkParams {
+            path: None,
+            chain: Some("paseo".to_owned()),
+            verbose: None,
+            parachain: Some(vec!["asset-hub".to_string()]),
+        };
+        let chain_normalized = params.normalized_chain();
+        let args = build_up_network_args(&params, &chain_normalized);
+        assert_eq!(
+            args,
+            vec![
+                "up".to_string(),
+                "paseo".to_string(),
+                "-y".to_string(),
+                "--detach".to_string(),
+                "--parachain".to_string(),
+                "asset-hub".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn build_args_with_parachain_for_path() {
+        let params = UpNetworkParams {
+            path: Some("./network.toml".to_owned()),
+            chain: None,
+            verbose: None,
+            parachain: Some(vec!["asset-hub#1000:9944".to_string()]),
+        };
+        let chain_normalized = params.normalized_chain();
+        let args = build_up_network_args(&params, &chain_normalized);
+        assert_eq!(
+            args,
+            vec![
+                "up".to_string(),
+                "network".to_string(),
+                "./network.toml".to_string(),
+                "-y".to_string(),
+                "--detach".to_string(),
+                "--parachain".to_string(),
+                "asset-hub#1000:9944".to_string()
+            ]
+        );
     }
 }

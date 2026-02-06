@@ -25,8 +25,9 @@ pub struct UpInkNodeParams {
 /// Looks for lines like `url: ws://localhost:9944/` in the output.
 fn parse_ws_url(output: &str) -> Option<String> {
     for line in output.lines() {
+        let cleaned = strip_ansi(line);
         // Strip common prefixes (pipe chars from formatted output)
-        let trimmed = line.trim().trim_start_matches('│').trim();
+        let trimmed = cleaned.trim().trim_start_matches('│').trim();
         // Look for "url: ws://..." pattern
         if trimmed.starts_with("url:") && trimmed.contains("ws://") {
             if let Some(start) = trimmed.find("ws://") {
@@ -35,6 +36,27 @@ fn parse_ws_url(output: &str) -> Option<String> {
         }
     }
     None
+}
+
+fn strip_ansi(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '\u{1b}' {
+            if matches!(chars.peek(), Some('[')) {
+                chars.next();
+                for next in chars.by_ref() {
+                    if ('@'..='~').contains(&next) {
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
+        out.push(ch);
+    }
+    out
 }
 
 /// Parse the output to extract PIDs from the `kill -9` hint.
@@ -133,5 +155,12 @@ mod tests {
         let output = "Some error occurred";
         let url = parse_ws_url(output);
         assert_eq!(url, None);
+    }
+
+    #[test]
+    fn parse_ws_url_strips_ansi() {
+        let output = "\u{1b}[2m│  url: ws://localhost:9944/\u{1b}[0m";
+        let url = parse_ws_url(output);
+        assert_eq!(url, Some("ws://localhost:9944".to_owned()));
     }
 }

@@ -23,6 +23,10 @@ pub struct CallContractParams {
     pub message: String,
     /// Method arguments as space-separated values.
     #[schemars(description = "Method arguments as space-separated values")]
+    #[serde(
+        default,
+        deserialize_with = "crate::tools::common::deserialize_stringy_bool"
+    )]
     pub args: Option<String>,
     /// Value to transfer with the call (in tokens).
     #[schemars(description = "Value to transfer with the call (in tokens)")]

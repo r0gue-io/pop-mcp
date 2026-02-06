@@ -1,7 +1,6 @@
 //! Command execution for Pop CLI
 
-#[cfg(feature = "pop-e2e")]
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::error::{PopMcpError, PopMcpResult};
@@ -64,7 +63,7 @@ impl PopExecutor {
     }
 
     fn execute_raw(&self, args: &[&str]) -> PopMcpResult<CommandOutput> {
-        let mut cmd = Command::new("pop");
+        let mut cmd = Command::new(resolve_pop_binary());
         cmd.args(args);
 
         #[cfg(feature = "pop-e2e")]
@@ -109,9 +108,64 @@ impl PopExecutor {
     }
 }
 
+fn resolve_pop_binary() -> PathBuf {
+    if let Ok(path) = std::env::var("POP_CLI_PATH") {
+        let candidate = PathBuf::from(path);
+        if candidate.exists() {
+            return candidate;
+        }
+    }
+
+    if let Some(path) = find_in_path("pop") {
+        return path;
+    }
+
+    let mut candidates = Vec::new();
+    if let Ok(home) = std::env::var("HOME") {
+        candidates.push(PathBuf::from(home).join(".cargo/bin/pop"));
+    }
+    candidates.push(PathBuf::from("/opt/homebrew/bin/pop"));
+    candidates.push(PathBuf::from("/usr/local/bin/pop"));
+
+    candidates
+        .into_iter()
+        .find(|p| p.exists())
+        .unwrap_or_else(|| PathBuf::from("pop"))
+}
+
+fn find_in_path(bin: &str) -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    for entry in std::env::split_paths(&path) {
+        let candidate = entry.join(bin);
+        if is_executable(&candidate) {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+fn is_executable(path: &Path) -> bool {
+    if !path.exists() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(metadata) = path.metadata() {
+            return metadata.permissions().mode() & 0o111 != 0;
+        }
+        false
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn command_output_combines_streams() {
@@ -135,5 +189,86 @@ mod tests {
             output.combined(),
             "(Command succeeded but produced no output)"
         );
+    }
+
+    #[test]
+    #[allow(clippy::panic)]
+    fn resolve_pop_binary_prefers_pop_cli_path() {
+        let temp = match tempdir() {
+            Ok(dir) => dir,
+            Err(err) => panic!("tempdir failed: {err}"),
+        };
+        let pop_path = temp.path().join("pop");
+        if let Err(err) = std::fs::write(&pop_path, "echo pop") {
+            panic!("write failed: {err}");
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = match std::fs::metadata(&pop_path) {
+                Ok(m) => m.permissions(),
+                Err(err) => panic!("metadata failed: {err}"),
+            };
+            perms.set_mode(0o755);
+            if let Err(err) = std::fs::set_permissions(&pop_path, perms) {
+                panic!("set_permissions failed: {err}");
+            }
+        }
+
+        let prev = std::env::var_os("POP_CLI_PATH");
+        std::env::set_var("POP_CLI_PATH", &pop_path);
+        let resolved = resolve_pop_binary();
+        if let Some(value) = prev {
+            std::env::set_var("POP_CLI_PATH", value);
+        } else {
+            std::env::remove_var("POP_CLI_PATH");
+        }
+
+        assert_eq!(resolved, pop_path);
+    }
+
+    #[test]
+    #[allow(clippy::panic)]
+    fn resolve_pop_binary_uses_path_search() {
+        let temp = match tempdir() {
+            Ok(dir) => dir,
+            Err(err) => panic!("tempdir failed: {err}"),
+        };
+        let pop_path = temp.path().join("pop");
+        if let Err(err) = std::fs::write(&pop_path, "echo pop") {
+            panic!("write failed: {err}");
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = match std::fs::metadata(&pop_path) {
+                Ok(m) => m.permissions(),
+                Err(err) => panic!("metadata failed: {err}"),
+            };
+            perms.set_mode(0o755);
+            if let Err(err) = std::fs::set_permissions(&pop_path, perms) {
+                panic!("set_permissions failed: {err}");
+            }
+        }
+
+        let prev_pop_cli_path = std::env::var_os("POP_CLI_PATH");
+        let prev_path = std::env::var_os("PATH");
+        std::env::remove_var("POP_CLI_PATH");
+        std::env::set_var("PATH", temp.path());
+
+        let resolved = resolve_pop_binary();
+
+        if let Some(value) = prev_pop_cli_path {
+            std::env::set_var("POP_CLI_PATH", value);
+        } else {
+            std::env::remove_var("POP_CLI_PATH");
+        }
+        if let Some(value) = prev_path {
+            std::env::set_var("PATH", value);
+        } else {
+            std::env::remove_var("PATH");
+        }
+
+        assert_eq!(resolved, pop_path);
     }
 }

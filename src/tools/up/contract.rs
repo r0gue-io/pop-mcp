@@ -22,6 +22,10 @@ pub struct DeployContractParams {
     pub constructor: Option<String>,
     /// Constructor arguments as space-separated values.
     #[schemars(description = "Constructor arguments as space-separated values")]
+    #[serde(
+        default,
+        deserialize_with = "crate::tools::common::deserialize_stringy_bool"
+    )]
     pub args: Option<String>,
     /// Initial balance to transfer to the contract (in tokens).
     #[schemars(description = "Initial balance to transfer to the contract (in tokens)")]
@@ -152,6 +156,28 @@ mod tests {
                 "ws://localhost:9944".to_owned(),
             ]
         );
+    }
+
+    #[test]
+    #[allow(clippy::panic)]
+    fn deserialize_args_from_json_bool() {
+        let json = r#"{"path": "./flipper", "args": false}"#;
+        let params: DeployContractParams = match serde_json::from_str(json) {
+            Ok(params) => params,
+            Err(err) => panic!("failed to deserialize args bool: {err}"),
+        };
+        assert_eq!(params.args, Some("false".to_owned()));
+    }
+
+    #[test]
+    #[allow(clippy::panic)]
+    fn deserialize_args_from_json_string() {
+        let json = r#"{"path": "./flipper", "args": "true"}"#;
+        let params: DeployContractParams = match serde_json::from_str(json) {
+            Ok(params) => params,
+            Err(err) => panic!("failed to deserialize args string: {err}"),
+        };
+        assert_eq!(params.args, Some("true".to_owned()));
     }
 
     #[test]

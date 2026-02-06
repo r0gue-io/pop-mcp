@@ -46,6 +46,10 @@ cargo test --features pop-e2e             # Integration tests
 ### Commits
 - Conventional prefixes: `fix:`, `feat:`, `refactor:`
 - Imperative, ≤72 chars
+- **Pre-commit (Rust):** Run `cargo +nightly fmt --all` and `cargo clippy --all-features --all-targets` before committing Rust changes.
+
+### Scope & Ownership
+- Before changing tests to fix upstream behavior, confirm the root cause and agree whether the fix belongs upstream or in this repo.
 
 ---
 
@@ -112,37 +116,7 @@ async fn tool_name(&self, Parameters(params): Parameters<ToolParams>) -> Result<
 
 - **Schema:** Must have `"type": "object"` and `"properties": {}` at top level
 - **Pop CLI:** Some commands return exit 0 on logical errors - check output text
-- **Lifetimes:** Store owned strings before building arg refs
-- **Ports:** Use non-default ports (9945, 8546) in tests to avoid conflicts
 
----
-
-## Existing Tools
-
-| Tool | Command | Key Params |
-|------|---------|------------|
-| `create_contract` | `pop new contract` | name, template |
-| `build_contract` | `pop build --path` | path, release |
-| `test_contract` | `pop test --path` | path, e2e |
-| `deploy_contract` | `pop up <path>` | path, constructor, args, suri, url |
-| `call_contract` | `pop call contract` | path, contract, message, args |
-| `up_ink_node` | `pop up ink-node` | ports |
-| `clean_nodes` | `pop clean node --pid` | pids |
-| `convert_address` | `pop convert address` | address |
-
----
-
-## Future Tools
-
-| Tool | Command | Purpose |
-|------|---------|---------|
-| `up_network` | `pop up paseo/kusama/...` | Connect to live networks |
-| `new_chain` | `pop new chain` | Create parachains |
-| `new_pallet` | `pop new pallet` | Create pallets |
-| `build_spec` | `pop build spec` | Build chain specs |
-| `call_chain` | `pop call chain` | Runtime calls |
-
----
 
 ## Adding New Tools
 

@@ -19,6 +19,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 schemars = "1.0"
 anyhow = "1.0"
+toml = "0.8"
 tempfile = { version = "3", optional = true }
 
 [dev-dependencies]

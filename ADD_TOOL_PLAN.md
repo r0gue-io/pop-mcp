@@ -200,13 +200,14 @@ Spawn a **Rust Engineer Agent** to review the implementation.
 cargo test --features=pop-e2e
 ```
 
-### 2. Fresh Claude session E2E test
-Build and test the tool from a fresh Claude session:
+### 2. Fresh agent E2E test
+Build and test the tool from a fresh sub-agent session:
 
 ```bash
 cargo build --release
-claude -p --dangerously-skip-permissions "Using pop-mcp, [E2E test scenario from spec]"
 ```
+
+Spawn a sub-agent to run the E2E scenario and report results.
 
 This verifies:
 - Tool is discoverable via MCP

@@ -192,33 +192,26 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::panic)]
     fn resolve_pop_binary_prefers_pop_cli_path() {
         let temp = match tempdir() {
             Ok(dir) => dir,
-            Err(_) => {
-                assert!(false);
-                return;
-            }
+            Err(err) => panic!("tempdir failed: {err}"),
         };
         let pop_path = temp.path().join("pop");
-        if std::fs::write(&pop_path, "echo pop").is_err() {
-            assert!(false);
-            return;
+        if let Err(err) = std::fs::write(&pop_path, "echo pop") {
+            panic!("write failed: {err}");
         }
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             let mut perms = match std::fs::metadata(&pop_path) {
                 Ok(m) => m.permissions(),
-                Err(_) => {
-                    assert!(false);
-                    return;
-                }
+                Err(err) => panic!("metadata failed: {err}"),
             };
             perms.set_mode(0o755);
-            if std::fs::set_permissions(&pop_path, perms).is_err() {
-                assert!(false);
-                return;
+            if let Err(err) = std::fs::set_permissions(&pop_path, perms) {
+                panic!("set_permissions failed: {err}");
             }
         }
 
@@ -235,33 +228,26 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::panic)]
     fn resolve_pop_binary_uses_path_search() {
         let temp = match tempdir() {
             Ok(dir) => dir,
-            Err(_) => {
-                assert!(false);
-                return;
-            }
+            Err(err) => panic!("tempdir failed: {err}"),
         };
         let pop_path = temp.path().join("pop");
-        if std::fs::write(&pop_path, "echo pop").is_err() {
-            assert!(false);
-            return;
+        if let Err(err) = std::fs::write(&pop_path, "echo pop") {
+            panic!("write failed: {err}");
         }
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             let mut perms = match std::fs::metadata(&pop_path) {
                 Ok(m) => m.permissions(),
-                Err(_) => {
-                    assert!(false);
-                    return;
-                }
+                Err(err) => panic!("metadata failed: {err}"),
             };
             perms.set_mode(0o755);
-            if std::fs::set_permissions(&pop_path, perms).is_err() {
-                assert!(false);
-                return;
+            if let Err(err) = std::fs::set_permissions(&pop_path, perms) {
+                panic!("set_permissions failed: {err}");
             }
         }
 

@@ -54,9 +54,10 @@ args = ["-lxcm=trace,lsystem::events=trace,lruntime=trace"]
     let result = up_network(
         &executor,
         UpNetworkParams {
-            path: Some(config_path.to_string_lossy().to_string()),
+            path: Some(config_path.to_string_lossy().into_owned()),
             chain: None,
             verbose: Some(true),
+            parachain: None,
         },
     )?;
 
